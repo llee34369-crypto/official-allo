@@ -665,8 +665,9 @@ export default function LandingPage() {
                 product layer where audio can be captured, processed, analyzed, and monetized in a transparent ecosystem.
               </p>
               <p className="text-white/50 text-lg leading-relaxed">
-                The protocol takes the core themes from the documentation, but the landing page tells the product story:
-                AI voice tooling, developer integrations, on-chain ownership, and token-driven participation working together.
+                The landing page builds on the core ideas from the documentation,
+                presenting the product as a unified system—combining AI voice tools, developer integrations, on-chain ownership, and token-based participation.
+                
               </p>
             </motion.div>
 
@@ -767,7 +768,7 @@ export default function LandingPage() {
                 <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.5em] font-black mb-6">Tokenomics</p>
                 <h2 className="text-5xl lg:text-7xl font-display font-black mb-8 tracking-tight leading-[1.05]">SPKR is designed to fund adoption, reward users, and scale the protocol.</h2>
                 <p className="text-white/60 text-xl leading-relaxed">
-                  Hover the chart to explore each allocation. The visualization is intentionally more alive here so the token design feels like part of the product story, not a pasted spreadsheet.
+                  Hover the chart to explore each allocation.
                 </p>
               </div>
               <div className="rounded-[32px] border border-brand-red/30 bg-brand-red/10 px-10 py-8 red-glow">

@@ -25,8 +25,8 @@ const BSC_CHAIN_ID = 56;
 const TOTAL_SUPPLY = 100000000;
 const AIRDROP_POOL = 20000000;
 const MIN_TX_ELIGIBLE = 10;
-const MAX_TX_FOR_CAP = 1000;
-const MAX_USER_CAP = 5000;
+const MAX_TX_FOR_CAP = 10000;
+const MAX_USER_CAP = 50000;
 const SNAPSHOT_TIMESTAMP = BigInt(Math.floor(Date.UTC(2026, 2, 1, 0, 0, 0) / 1000));
 const SNAPSHOT_LABEL = 'Before March 1, 2026';
 
