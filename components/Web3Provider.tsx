@@ -5,6 +5,7 @@ import { createWeb3Modal, defaultWagmiConfig } from '@web3modal/wagmi/react';
 import { WagmiProvider } from 'wagmi';
 import { bsc } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AllocationStateProvider } from '@/components/AllocationStateProvider';
 
 // 1. Get projectId at https://cloud.walletconnect.com
 // NOTE: You MUST set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in your environment variables
@@ -60,7 +61,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        {children}
+        <AllocationStateProvider>{children}</AllocationStateProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

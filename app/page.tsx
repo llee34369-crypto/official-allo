@@ -26,7 +26,7 @@ const AIRDROP_POOL = 15000000;
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
   x: 'https://x.com/SpeakerAI_BNB',
-  discord: 'https://discord.gg/rhtrZHUNb',
+  discord: 'https://discord.gg/tyAE9eeE8c',
 } as const;
 
 const productPillars = [
@@ -60,6 +60,8 @@ const useCases = [
   },
   {
     title: 'For Developers',
+
+
     text: 'Plug voice AI into dApps, dashboards, and products with APIs, SDKs, and tokenized ecosystem mechanics.',
   },
   {
@@ -319,7 +321,7 @@ function TokenomicsChart() {
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-16 items-center">
+    <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-16 items-start">
       <div className="flex justify-center">
         <div className="w-full max-w-[450px]">
           <div className="relative [perspective:2500px]">
@@ -452,38 +454,46 @@ function TokenomicsChart() {
       </div>
 
       <div className="space-y-6">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeIndex}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="glass-card rounded-[40px] p-10 border-brand-red/40 bg-[linear-gradient(165deg,rgba(139,0,0,0.2),rgba(15,15,15,0.95))]"
-          >
-            <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.4em] font-black mb-4">Allocation Details</p>
-            <h3 className="text-4xl lg:text-5xl font-display font-black mb-4 tracking-tight">{activeSlice.label}</h3>
-            <div className="flex items-baseline gap-3 mb-6">
-              <span className="text-5xl font-display font-black text-white">{activeSlice.amount.toLocaleString()}</span>
-              <span className="text-white/40 font-bold tracking-widest">SPKR</span>
-            </div>
-            <p className="text-white/70 text-lg leading-relaxed">{activeSlice.description}</p>
-          </motion.div>
-        </AnimatePresence>
+        <div className="relative min-h-[350px] sm:min-h-[330px] lg:min-h-[360px]">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeIndex}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="absolute inset-0 glass-card rounded-[40px] p-8 sm:p-10 border-brand-red/40 bg-[linear-gradient(165deg,rgba(139,0,0,0.2),rgba(15,15,15,0.95))] grid grid-rows-[auto_auto_auto_1fr]"
+            >
+              <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.4em] font-black mb-4">Allocation Details</p>
+              <h3 className="text-3xl sm:text-4xl lg:text-[2.8rem] xl:text-5xl font-display font-black mb-5 tracking-tight leading-[0.95] max-w-[11ch]">
+                {activeSlice.label}
+              </h3>
+              <div className="flex flex-wrap items-end gap-x-3 gap-y-2 mb-5">
+                <span className="text-4xl sm:text-5xl lg:text-[3rem] xl:text-5xl font-display font-black text-white leading-none">
+                  {activeSlice.amount.toLocaleString()}
+                </span>
+                <span className="text-white/40 font-bold tracking-widest">SPKR</span>
+              </div>
+              <p className="self-end text-white/70 text-base sm:text-lg lg:text-base xl:text-lg leading-relaxed max-w-[30ch] pr-2">
+                {activeSlice.description}
+              </p>
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-fr">
           {tokenomics.map((slice, index) => (
             <button
               key={slice.label}
               onMouseEnter={() => setActiveIndex(index)}
               onFocus={() => setActiveIndex(index)}
               onClick={() => setActiveIndex(index)}
-              className={`group text-left rounded-[28px] border p-5 transition-all duration-300 ${
+              className={`group text-left rounded-[28px] border p-5 transition-all duration-300 min-h-[128px] h-full flex flex-col justify-between ${
                 activeIndex === index
                   ? 'border-brand-red/50 bg-brand-red/15 red-glow scale-[1.02]'
                   : 'border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20'
               }`}
             >
-              <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-start justify-between gap-3 mb-3">
                 <span className="inline-flex items-center gap-3 text-sm font-black tracking-tight">
                   <span className="w-4 h-4 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.2)]" style={{ backgroundColor: slice.color }} />
                   {slice.label}
@@ -812,7 +822,7 @@ export default function LandingPage() {
               </div>
             </motion.div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 min-w-0 auto-rows-fr">
               {useCases.map((item, idx) => (
                 <motion.div 
                   key={item.title} 
@@ -820,10 +830,24 @@ export default function LandingPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: idx * 0.1 }}
-                  className="glass-card rounded-[40px] p-10 flex flex-col border-white/5 hover:border-brand-red/30 transition-all group"
+                  className={`glass-card rounded-[40px] p-10 flex flex-col min-w-0 transition-all group relative overflow-hidden ${
+                    idx === 0
+                      ? 'md:col-span-2 border-brand-red/20 bg-[linear-gradient(180deg,rgba(139,0,0,0.12),rgba(12,12,12,0.96))]'
+                      : 'border-white/5 hover:border-brand-red/30'
+                  }`}
                 >
-                  <h3 className="text-3xl font-display font-black mb-8 tracking-tight group-hover:text-brand-red-glow transition-colors">{item.title}</h3>
-                  <p className="text-white/60 text-lg leading-relaxed mt-auto">{item.text}</p>
+                  {idx === 0 && (
+                    <div className="absolute top-0 right-0 w-44 h-44 bg-brand-red/10 blur-[80px] -mr-16 -mt-16 pointer-events-none" />
+                  )}
+                  <div className="relative flex h-full flex-col">
+                    <span className="text-[10px] uppercase tracking-[0.35em] font-black text-white/30 mb-6">
+                      Use Case {idx + 1}
+                    </span>
+                    <h3 className="text-2xl xl:text-3xl font-display font-black mb-6 tracking-tight leading-[1.05] group-hover:text-brand-red-glow transition-colors">
+                      {item.title}
+                    </h3>
+                    <p className="text-white/60 text-lg leading-relaxed mt-auto">{item.text}</p>
+                  </div>
                 </motion.div>
               ))}
             </div>
@@ -925,12 +949,12 @@ export default function LandingPage() {
             <div className="relative z-10 max-w-4xl">
               <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.5em] font-black mb-8">Launch Into SpeakerAI</p>
               <h2 className="text-5xl lg:text-8xl font-display font-black leading-[0.9] mb-10 tracking-tighter">
-                Explore the product,
-                <span className="text-brand-red"> review the token design,</span>
+                See what SpeakerAI does,
+                <span className="text-brand-red"> learn how the token works,</span>
                 and check your allocation.
               </h2>
               <p className="text-white/70 text-xl lg:text-2xl leading-relaxed mb-12 max-w-3xl">
-                Start with the docs if you want the full protocol breakdown, or jump straight into the allocation checker to see your SPKR estimate.
+                If you want the full breakdown, start with the docs. If you just want to see what you may be eligible for, head straight to the allocation checker.
               </p>
               <div className="flex flex-col sm:flex-row gap-6 justify-center lg:justify-start">
                 <Link

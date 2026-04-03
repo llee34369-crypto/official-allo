@@ -1,12 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAccount, useAccountEffect, useChainId, useDisconnect } from 'wagmi';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { createPublicClient, http } from 'viem';
 import { bsc } from 'viem/chains';
+import {
+  AirdropData,
+  getInitialAirdropState,
+  normalizeAddress,
+  useAllocationState,
+} from '@/components/AllocationStateProvider';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -29,20 +35,13 @@ const MAX_TX_FOR_CAP = 10000;
 const MAX_USER_CAP = 50000;
 const SNAPSHOT_TIMESTAMP = BigInt(Math.floor(Date.UTC(2026, 2, 1, 0, 0, 0) / 1000));
 const SNAPSHOT_LABEL = 'Before March 1, 2026';
+const ALLOCATION_STORAGE_KEY = 'speakerai-allocation';
 
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
   x: 'https://x.com/SpeakerAI_BNB',
-  discord: 'https://discord.gg/rhtrZHUNb',
+  discord: 'https://discord.gg/tyAE9eeE8c',
 } as const;
-
-interface AirdropData {
-  txCount: number;
-  isEligible: boolean;
-  allocation: number;
-  loading: boolean;
-  error: string | null;
-}
 
 function XLogo(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -69,13 +68,70 @@ let snapshotBlockPromise: Promise<bigint> | null = null;
 
 const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
-const getInitialAirdropState = (): AirdropData => ({
-  txCount: 0,
-  isEligible: false,
-  allocation: 0,
-  loading: false,
-  error: null,
-});
+interface PersistedAirdropData {
+  version: 1;
+  address: string;
+  txCount: number;
+  isEligible: boolean;
+  allocation: number;
+}
+
+const loadPersistedAirdrop = (walletAddress: string): AirdropData | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(ALLOCATION_STORAGE_KEY);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsedValue = JSON.parse(rawValue) as Partial<PersistedAirdropData>;
+
+    if (
+      parsedValue.version !== 1 ||
+      typeof parsedValue.address !== 'string' ||
+      typeof parsedValue.txCount !== 'number' ||
+      typeof parsedValue.isEligible !== 'boolean' ||
+      typeof parsedValue.allocation !== 'number'
+    ) {
+      return null;
+    }
+
+    if (normalizeAddress(parsedValue.address) !== normalizeAddress(walletAddress)) {
+      return null;
+    }
+
+    return {
+      txCount: parsedValue.txCount,
+      isEligible: parsedValue.isEligible,
+      allocation: parsedValue.allocation,
+      loading: false,
+      error: null,
+    };
+  } catch (error) {
+    console.error('Unable to restore saved allocation state:', error);
+    return null;
+  }
+};
+
+const persistAirdrop = (walletAddress: string, airdrop: Omit<AirdropData, 'loading' | 'error'>) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const payload: PersistedAirdropData = {
+    version: 1,
+    address: walletAddress,
+    txCount: airdrop.txCount,
+    isEligible: airdrop.isEligible,
+    allocation: airdrop.allocation,
+  };
+
+  window.localStorage.setItem(ALLOCATION_STORAGE_KEY, JSON.stringify(payload));
+};
 
 const getSnapshotBlockNumber = async () => {
   if (snapshotBlockPromise) {
@@ -111,10 +167,11 @@ export default function SpeakerAIDashboard() {
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
   const { open } = useWeb3Modal();
+  const { airdrops, setAirdrop: storeAirdrop } = useAllocationState();
 
-  const [airdrop, setAirdrop] = useState<AirdropData>(getInitialAirdropState);
   const [copySuccess, setCopySuccess] = useState(false);
   const calculationRequestRef = useRef(0);
+  const airdrop = address ? (airdrops[normalizeAddress(address)] ?? getInitialAirdropState()) : getInitialAirdropState();
 
   const connectWallet = () => open({ view: 'Connect' });
   const disconnectWallet = () => disconnect();
@@ -129,7 +186,12 @@ export default function SpeakerAIDashboard() {
   const calculateAllocation = async (walletAddress: string) => {
     const requestId = calculationRequestRef.current + 1;
     calculationRequestRef.current = requestId;
-    setAirdrop(prev => ({ ...prev, loading: true, error: null }));
+    storeAirdrop(walletAddress, {
+      ...airdrops[normalizeAddress(walletAddress)],
+      ...getInitialAirdropState(),
+      loading: true,
+      error: null,
+    });
 
     try {
       const snapshotBlockNumber = await getSnapshotBlockNumber();
@@ -150,37 +212,56 @@ export default function SpeakerAIDashboard() {
         return;
       }
 
-      setAirdrop({
+      const nextAirdrop = {
         txCount,
         isEligible,
         allocation,
         loading: false,
         error: null,
-      });
+      };
+
+      persistAirdrop(walletAddress, nextAirdrop);
+      storeAirdrop(walletAddress, nextAirdrop);
     } catch (error) {
       if (calculationRequestRef.current !== requestId) {
         return;
       }
 
       console.error('Allocation calculation error:', error);
-      setAirdrop(prev => ({
-        ...prev,
+      storeAirdrop(walletAddress, {
+        ...airdrops[normalizeAddress(walletAddress)],
+        ...getInitialAirdropState(),
         loading: false,
         error: 'Unable to calculate your snapshot allocation right now. Please try again.',
-      }));
+      });
     }
   };
 
+  useEffect(() => {
+    if (!address || !isConnected) {
+      return;
+    }
+
+    setCopySuccess(false);
+    const cachedAirdrop = airdrops[normalizeAddress(address)];
+
+    if (cachedAirdrop) {
+      return;
+    }
+
+    const persistedAirdrop = loadPersistedAirdrop(address);
+
+    if (persistedAirdrop) {
+      storeAirdrop(address, persistedAirdrop);
+      return;
+    }
+
+    void calculateAllocation(address);
+  }, [address, airdrops, isConnected]);
+
   useAccountEffect({
-    onConnect(data) {
-      setCopySuccess(false);
-      if (data.address) {
-        calculateAllocation(data.address);
-      }
-    },
     onDisconnect() {
       calculationRequestRef.current += 1;
-      setAirdrop(getInitialAirdropState());
       setCopySuccess(false);
     },
   });
@@ -321,9 +402,15 @@ export default function SpeakerAIDashboard() {
                         </span>
                         <span className="text-brand-red font-bold text-xl lg:text-2xl">SPKR</span>
                       </div>
-                      <p className="text-base text-white/60 max-w-2xl">
-                        Must have at least 10 transactions on the BNB Network before March 1, 2026.
-                      </p>
+                      {airdrop.isEligible ? (
+                        <p className="text-base text-white/60 max-w-2xl">
+                          Your wallet qualified in the snapshot and is eligible for this estimated SPKR allocation.
+                        </p>
+                      ) : (
+                        <p className="text-base text-white/60 max-w-2xl">
+                          Must have at least 10 transactions on the BNB Network before March 1, 2026.
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
@@ -537,7 +624,7 @@ export default function SpeakerAIDashboard() {
             <XCircle className="text-red-500 w-5 h-5" />
             <span className="text-sm font-medium text-red-200">{airdrop.error}</span>
             <button
-              onClick={() => setAirdrop(prev => ({ ...prev, error: null }))}
+              onClick={() => address && storeAirdrop(address, { ...airdrop, error: null })}
               className="ml-4 text-xs font-bold text-white/40 hover:text-white"
             >
               Dismiss
