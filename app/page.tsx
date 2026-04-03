@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 const TOTAL_SUPPLY = 100000000;
-const AIRDROP_POOL = 20000000;
+const AIRDROP_POOL = 15000000;
 
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
