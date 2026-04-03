@@ -23,7 +23,7 @@ import {
 
 const BSC_CHAIN_ID = 56;
 const TOTAL_SUPPLY = 100000000;
-const AIRDROP_POOL = 20000000;
+const AIRDROP_POOL = 15000000;
 const MIN_TX_ELIGIBLE = 10;
 const MAX_TX_FOR_CAP = 10000;
 const MAX_USER_CAP = 50000;
@@ -33,7 +33,7 @@ const SNAPSHOT_LABEL = 'Before March 1, 2026';
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
   x: 'https://x.com/SpeakerAI_BNB',
-  discord: 'https://discord.gg/rhtrZHUNb',
+  discord: 'https://discord.gg/tyAE9eeE8c',
 } as const;
 
 interface AirdropData {

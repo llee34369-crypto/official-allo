@@ -26,7 +26,7 @@ const AIRDROP_POOL = 15000000;
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
   x: 'https://x.com/SpeakerAI_BNB',
-  discord: 'https://discord.gg/rhtrZHUNb',
+  discord: 'https://discord.gg/tyAE9eeE8c',
 } as const;
 
 const productPillars = [
