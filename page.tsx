@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 const TOTAL_SUPPLY = 100000000;
-const AIRDROP_POOL = 20000000;
+const AIRDROP_POOL = 15000000;
 
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
@@ -60,6 +60,8 @@ const useCases = [
   },
   {
     title: 'For Developers',
+
+
     text: 'Plug voice AI into dApps, dashboards, and products with APIs, SDKs, and tokenized ecosystem mechanics.',
   },
   {
@@ -930,7 +932,7 @@ export default function LandingPage() {
                 and check your allocation.
               </h2>
               <p className="text-white/70 text-xl lg:text-2xl leading-relaxed mb-12 max-w-3xl">
-                Start with the docs if you want the full protocol breakdown, or jump straight into the allocation checker to see your SPKR estimate.
+                Start with the docs if you want the full protocol breakdown, or jump straight into the allocation checker to see your SPKR reward.
               </p>
               <div className="flex flex-col sm:flex-row gap-6 justify-center lg:justify-start">
                 <Link
