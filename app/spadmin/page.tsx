@@ -10,7 +10,11 @@ import {
   Wallet,
 } from 'lucide-react';
 
-import { getSpadminStats, isSupabaseConfigured } from '@/lib/supabase-admin';
+import {
+  getSpadminStats,
+  isSupabaseConfigured,
+  type SpadminStats,
+} from '@/lib/supabase-admin';
 import {
   isSpadminAuthenticated,
   isSpadminConfigured,
@@ -139,7 +143,7 @@ export default async function SpadminPage({
     );
   }
 
-  let stats = {
+  let stats: SpadminStats = {
     totalWallets: 0,
     totalSpkrChecked: 0,
     eligibleWallets: 0,
