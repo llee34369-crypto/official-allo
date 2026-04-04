@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import {
   ArrowLeft,
+  Clock3,
   Coins,
   Database,
   LockKeyhole,
@@ -232,7 +233,7 @@ export default async function SpadminPage({
           </div>
         ) : null}
 
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
           <div className="glass-card rounded-[32px] border border-brand-red/25 p-7">
             <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-red/15">
               <Coins className="h-7 w-7 text-brand-red-glow" />
@@ -275,6 +276,19 @@ export default async function SpadminPage({
           <div className="glass-card rounded-[32px] border border-white/10 p-7">
             <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
               <Database className="h-7 w-7 text-white/80" />
+            </div>
+            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
+              Total Transactions
+            </p>
+            <p className="text-4xl font-display font-black tracking-tight">
+              {numberFormatter.format(stats.totalTransactions)}
+            </p>
+            <p className="mt-2 text-sm text-white/50">Combined snapshot transactions</p>
+          </div>
+
+          <div className="glass-card rounded-[32px] border border-white/10 p-7">
+            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
+              <Clock3 className="h-7 w-7 text-white/80" />
             </div>
             <p className="mb-2 text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
               Last Checked
