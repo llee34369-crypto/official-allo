@@ -25,6 +25,7 @@ interface AdminStats {
   totalSpkrChecked: number;
   eligibleWallets: number;
   totalTransactions: number;
+  lastCheckedAt: string | null;
 }
 
 const emptyStats: AdminStats = {
@@ -32,6 +33,7 @@ const emptyStats: AdminStats = {
   totalSpkrChecked: 0,
   eligibleWallets: 0,
   totalTransactions: 0,
+  lastCheckedAt: null,
 };
 
 function formatErrorMessage(error: string | string[] | undefined) {
@@ -46,6 +48,17 @@ function formatErrorMessage(error: string | string[] | undefined) {
   }
 
   return null;
+}
+
+function formatTimestamp(value: string | null) {
+  if (!value) {
+    return 'No checks yet';
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
 }
 
 function LoginCard({ error }: { error: string | null }) {
@@ -265,12 +278,12 @@ export default async function SpadminPage({
               <Database className="h-7 w-7 text-white/80" />
             </div>
             <p className="mb-2 text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
-              Total Transactions
+              Last Checked
             </p>
             <p className="text-2xl font-display font-black tracking-tight">
-              {numberFormatter.format(stats.totalTransactions)}
+              {formatTimestamp(stats.lastCheckedAt)}
             </p>
-            <p className="mt-2 text-sm text-white/50">Combined snapshot transactions across saved wallets</p>
+            <p className="mt-2 text-sm text-white/50">Most recent wallet check saved to Supabase</p>
           </div>
         </div>
       </main>
