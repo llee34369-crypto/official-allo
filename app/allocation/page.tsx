@@ -76,6 +76,12 @@ interface PersistedAirdropData {
   allocation: number;
 }
 
+interface AllocationSnapshot {
+  txCount: number;
+  isEligible: boolean;
+  allocation: number;
+}
+
 const loadPersistedAirdrop = (walletAddress: string): AirdropData | null => {
   if (typeof window === 'undefined') {
     return null;
@@ -131,6 +137,29 @@ const persistAirdrop = (walletAddress: string, airdrop: Omit<AirdropData, 'loadi
   };
 
   window.localStorage.setItem(ALLOCATION_STORAGE_KEY, JSON.stringify(payload));
+};
+
+const saveAllocationCheck = async (walletAddress: string, airdrop: AllocationSnapshot) => {
+  try {
+    const response = await fetch('/api/allocation-checks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        address: walletAddress,
+        txCount: airdrop.txCount,
+        isEligible: airdrop.isEligible,
+        allocation: airdrop.allocation,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+  } catch (error) {
+    console.error('Unable to sync allocation check to Supabase:', error);
+  }
 };
 
 const getSnapshotBlockNumber = async () => {
@@ -222,6 +251,7 @@ export default function SpeakerAIDashboard() {
 
       persistAirdrop(walletAddress, nextAirdrop);
       storeAirdrop(walletAddress, nextAirdrop);
+      void saveAllocationCheck(walletAddress, nextAirdrop);
     } catch (error) {
       if (calculationRequestRef.current !== requestId) {
         return;
@@ -253,6 +283,7 @@ export default function SpeakerAIDashboard() {
 
     if (persistedAirdrop) {
       storeAirdrop(address, persistedAirdrop);
+      void saveAllocationCheck(address, persistedAirdrop);
       return;
     }
 
