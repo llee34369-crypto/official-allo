@@ -14,8 +14,11 @@ interface AllocationCheckPayload {
 export async function POST(request: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json(
-      { error: 'Supabase is not configured on the server.' },
-      { status: 503 }
+      {
+        ok: false,
+        warning: 'Supabase is not configured on the server.',
+      },
+      { status: 200 }
     );
   }
 
@@ -73,8 +76,11 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Failed to save allocation check:', error);
     return NextResponse.json(
-      { error: 'Unable to store the allocation check right now.' },
-      { status: 500 }
+      {
+        ok: false,
+        warning: 'Unable to store the allocation check right now.',
+      },
+      { status: 200 }
     );
   }
 }
