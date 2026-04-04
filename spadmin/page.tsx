@@ -20,6 +20,20 @@ export const dynamic = 'force-dynamic';
 
 const numberFormatter = new Intl.NumberFormat('en-US');
 
+interface AdminStats {
+  totalWallets: number;
+  totalSpkrChecked: number;
+  eligibleWallets: number;
+  totalTransactions: number;
+}
+
+const emptyStats: AdminStats = {
+  totalWallets: 0,
+  totalSpkrChecked: 0,
+  eligibleWallets: 0,
+  totalTransactions: 0,
+};
+
 function formatErrorMessage(error: string | string[] | undefined) {
   const value = Array.isArray(error) ? error[0] : error;
 
@@ -32,17 +46,6 @@ function formatErrorMessage(error: string | string[] | undefined) {
   }
 
   return null;
-}
-
-function formatTimestamp(value: string | null) {
-  if (!value) {
-    return 'No wallet checks saved yet';
-  }
-
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
 }
 
 function LoginCard({ error }: { error: string | null }) {
@@ -64,13 +67,14 @@ function LoginCard({ error }: { error: string | null }) {
               Home
             </Link>
             <p className="mb-4 text-[11px] font-black uppercase tracking-[0.45em] text-brand-red-glow">
-              SpeakerAI
+              SpeakerAI Admin
             </p>
             <h1 className="max-w-[10ch] text-5xl font-display font-black leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
-              
+              Protected admin dashboard.
             </h1>
             <p className="mt-6 max-w-2xl text-lg text-white/60">
-              
+              Enter the admin password to view wallet totals and SPKR allocation
+              stats saved from the allocation checker.
             </p>
           </div>
 
@@ -80,15 +84,15 @@ function LoginCard({ error }: { error: string | null }) {
                 <LockKeyhole className="h-8 w-8 text-brand-red-glow" />
               </div>
               <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[10px] font-black uppercase tracking-[0.3em] text-white/50">
-                
+                Password Gate
               </span>
             </div>
 
             <h2 className="mb-3 text-3xl font-display font-black tracking-tight">
-              
+              Access `/spadmin`
             </h2>
             <p className="mb-8 text-sm leading-relaxed text-white/55">
-              This page is only for authorized personel and employee.
+              This page is only for authorized personnel and internal use.
             </p>
 
             {error ? (
@@ -150,12 +154,7 @@ export default async function SpadminPage({
     );
   }
 
-  let stats = {
-    totalWallets: 0,
-    totalSpkrChecked: 0,
-    eligibleWallets: 0,
-    lastCheckedAt: null as string | null,
-  };
+  let stats: AdminStats = emptyStats;
   let dataError: string | null = null;
 
   if (!isSupabaseConfigured()) {
@@ -190,7 +189,7 @@ export default async function SpadminPage({
               SPKR check totals
             </h1>
             <p className="mt-3 max-w-2xl text-white/55">
-              status.
+              Totals reflect the latest saved result for each unique wallet.
             </p>
           </div>
 
@@ -232,7 +231,7 @@ export default async function SpadminPage({
             <p className="text-4xl font-display font-black tracking-tight">
               {numberFormatter.format(stats.totalSpkrChecked)}
             </p>
-            <p className="mt-2 text-sm text-white/50">total SPKR checked</p>
+            <p className="mt-2 text-sm text-white/50">Total SPKR checked</p>
           </div>
 
           <div className="glass-card rounded-[32px] border border-white/10 p-7">
@@ -245,7 +244,7 @@ export default async function SpadminPage({
             <p className="text-4xl font-display font-black tracking-tight">
               {numberFormatter.format(stats.totalWallets)}
             </p>
-            <p className="mt-2 text-sm text-white/50">Total wallets</p>
+            <p className="mt-2 text-sm text-white/50">Unique wallets checked</p>
           </div>
 
           <div className="glass-card rounded-[32px] border border-white/10 p-7">
@@ -266,12 +265,12 @@ export default async function SpadminPage({
               <Database className="h-7 w-7 text-white/80" />
             </div>
             <p className="mb-2 text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
-              Last Saved Check
+              Total Transactions
             </p>
             <p className="text-2xl font-display font-black tracking-tight">
-              {formatTimestamp(stats.lastCheckedAt)}
+              {numberFormatter.format(stats.totalTransactions)}
             </p>
-            <p className="mt-2 text-sm text-white/50">Most recent wallet sync from the allocation page</p>
+            <p className="mt-2 text-sm text-white/50">Combined snapshot transactions across saved wallets</p>
           </div>
         </div>
       </main>
