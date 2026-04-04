@@ -34,17 +34,6 @@ function formatErrorMessage(error: string | string[] | undefined) {
   return null;
 }
 
-function formatTimestamp(value: string | null) {
-  if (!value) {
-    return 'No wallet checks saved yet';
-  }
-
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}
-
 function LoginCard({ error }: { error: string | null }) {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white selection:bg-brand-red selection:text-white">
@@ -154,7 +143,7 @@ export default async function SpadminPage({
     totalWallets: 0,
     totalSpkrChecked: 0,
     eligibleWallets: 0,
-    lastCheckedAt: null as string | null,
+    totalTransactions: 0,
   };
   let dataError: string | null = null;
 
@@ -266,12 +255,12 @@ export default async function SpadminPage({
               <Database className="h-7 w-7 text-white/80" />
             </div>
             <p className="mb-2 text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
-              Last Saved Check
+              Total Transactions
             </p>
             <p className="text-2xl font-display font-black tracking-tight">
-              {formatTimestamp(stats.lastCheckedAt)}
+              {numberFormatter.format(stats.totalTransactions)}
             </p>
-            <p className="mt-2 text-sm text-white/50">Most recent wallet sync from the allocation page</p>
+            <p className="mt-2 text-sm text-white/50">Combined snapshot transactions across saved wallets</p>
           </div>
         </div>
       </main>

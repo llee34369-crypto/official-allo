@@ -16,5 +16,5 @@ select
   count(*)::bigint as total_wallets,
   coalesce(sum(allocation), 0)::bigint as total_spkr_checked,
   count(*) filter (where is_eligible)::bigint as eligible_wallets,
-  max(checked_at) as last_checked_at
+  coalesce(sum(tx_count), 0)::bigint as total_transactions
 from public.allocation_checks;

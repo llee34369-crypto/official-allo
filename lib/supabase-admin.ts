@@ -11,14 +11,14 @@ export interface SpadminStats {
   totalWallets: number;
   totalSpkrChecked: number;
   eligibleWallets: number;
-  lastCheckedAt: string | null;
+  totalTransactions: number;
 }
 
 interface SpadminTotalsRow {
   total_wallets: number | string;
   total_spkr_checked: number | string;
   eligible_wallets: number | string;
-  last_checked_at: string | null;
+  total_transactions: number | string;
 }
 
 const MISSING_CONFIG_ERROR =
@@ -87,7 +87,7 @@ export async function upsertAllocationCheck(check: AllocationCheckRecord) {
 
 export async function getSpadminStats(): Promise<SpadminStats> {
   const response = await supabaseAdminFetch(
-    '/rest/v1/spadmin_totals?select=total_wallets,total_spkr_checked,eligible_wallets,last_checked_at&limit=1',
+    '/rest/v1/spadmin_totals?select=total_wallets,total_spkr_checked,eligible_wallets,total_transactions&limit=1',
     {
       method: 'GET',
     }
@@ -100,6 +100,6 @@ export async function getSpadminStats(): Promise<SpadminStats> {
     totalWallets: Number(row?.total_wallets ?? 0),
     totalSpkrChecked: Number(row?.total_spkr_checked ?? 0),
     eligibleWallets: Number(row?.eligible_wallets ?? 0),
-    lastCheckedAt: row?.last_checked_at ?? null,
+    totalTransactions: Number(row?.total_transactions ?? 0),
   };
 }
