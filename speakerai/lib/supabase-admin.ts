@@ -1,0 +1,105 @@
+import 'server-only';
+
+export interface AllocationCheckRecord {
+  walletAddress: string;
+  txCount: number;
+  isEligible: boolean;
+  allocation: number;
+}
+
+export interface SpadminStats {
+  totalWallets: number;
+  totalSpkrChecked: number;
+  eligibleWallets: number;
+  totalTransactions: number;
+}
+
+interface SpadminTotalsRow {
+  total_wallets: number | string;
+  total_spkr_checked: number | string;
+  eligible_wallets: number | string;
+  total_transactions: number | string;
+}
+
+const MISSING_CONFIG_ERROR =
+  'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in the environment.';
+
+export function isSupabaseConfigured() {
+  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function getSupabaseConfig() {
+  const url = process.env.SUPABASE_URL?.trim();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  if (!url || !serviceRoleKey) {
+    throw new Error(MISSING_CONFIG_ERROR);
+  }
+
+  return {
+    url: url.replace(/\/$/, ''),
+    serviceRoleKey,
+  };
+}
+
+async function supabaseAdminFetch(path: string, init: RequestInit = {}) {
+  const { url, serviceRoleKey } = getSupabaseConfig();
+  const headers = new Headers(init.headers);
+
+  headers.set('apikey', serviceRoleKey);
+  headers.set('Authorization', `Bearer ${serviceRoleKey}`);
+
+  if (!(init.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const response = await fetch(`${url}${path}`, {
+    ...init,
+    headers,
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Supabase request failed (${response.status}): ${message}`);
+  }
+
+  return response;
+}
+
+export async function upsertAllocationCheck(check: AllocationCheckRecord) {
+  await supabaseAdminFetch('/rest/v1/allocation_checks?on_conflict=wallet_address', {
+    method: 'POST',
+    headers: {
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify([
+      {
+        wallet_address: check.walletAddress.toLowerCase(),
+        tx_count: check.txCount,
+        is_eligible: check.isEligible,
+        allocation: check.allocation,
+        checked_at: new Date().toISOString(),
+      },
+    ]),
+  });
+}
+
+export async function getSpadminStats(): Promise<SpadminStats> {
+  const response = await supabaseAdminFetch(
+    '/rest/v1/spadmin_totals?select=total_wallets,total_spkr_checked,eligible_wallets,total_transactions&limit=1',
+    {
+      method: 'GET',
+    }
+  );
+
+  const rows = (await response.json()) as SpadminTotalsRow[];
+  const row = rows[0];
+
+  return {
+    totalWallets: Number(row?.total_wallets ?? 0),
+    totalSpkrChecked: Number(row?.total_spkr_checked ?? 0),
+    eligibleWallets: Number(row?.eligible_wallets ?? 0),
+    totalTransactions: Number(row?.total_transactions ?? 0),
+  };
+}
