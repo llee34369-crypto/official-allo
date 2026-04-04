@@ -12,6 +12,7 @@ export interface SpadminStats {
   totalSpkrChecked: number;
   eligibleWallets: number;
   totalTransactions: number;
+  lastCheckedAt: string | null;
 }
 
 interface SpadminTotalsRow {
@@ -101,5 +102,6 @@ export async function getSpadminStats(): Promise<SpadminStats> {
     totalSpkrChecked: Number(row?.total_spkr_checked ?? 0),
     eligibleWallets: Number(row?.eligible_wallets ?? 0),
     totalTransactions: Number(row?.total_transactions ?? 0),
+    lastCheckedAt: null,
   };
 }
