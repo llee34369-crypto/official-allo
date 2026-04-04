@@ -64,14 +64,13 @@ function LoginCard({ error }: { error: string | null }) {
               Home
             </Link>
             <p className="mb-4 text-[11px] font-black uppercase tracking-[0.45em] text-brand-red-glow">
-              SpeakerAI Admin
+              SpeakerAI
             </p>
             <h1 className="max-w-[10ch] text-5xl font-display font-black leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
-              Protected SPKR dashboard.
+              
             </h1>
             <p className="mt-6 max-w-2xl text-lg text-white/60">
-              Enter the admin password to see the total SPKR checked and how many
-              wallets have been saved to Supabase.
+              
             </p>
           </div>
 
@@ -81,16 +80,15 @@ function LoginCard({ error }: { error: string | null }) {
                 <LockKeyhole className="h-8 w-8 text-brand-red-glow" />
               </div>
               <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[10px] font-black uppercase tracking-[0.3em] text-white/50">
-                Password Gate
+                
               </span>
             </div>
 
             <h2 className="mb-3 text-3xl font-display font-black tracking-tight">
-              Access `/spadmin`
+              
             </h2>
             <p className="mb-8 text-sm leading-relaxed text-white/55">
-              This page uses a server-side password check and a signed cookie so
-              the admin password never needs to be exposed in the browser code.
+              This page is only for authorized personel and employee.
             </p>
 
             {error ? (
@@ -192,8 +190,7 @@ export default async function SpadminPage({
               SPKR check totals
             </h1>
             <p className="mt-3 max-w-2xl text-white/55">
-              Totals reflect the latest saved result per wallet. Re-checking the
-              same wallet updates its row instead of double-counting it.
+              status.
             </p>
           </div>
 
@@ -235,7 +232,7 @@ export default async function SpadminPage({
             <p className="text-4xl font-display font-black tracking-tight">
               {numberFormatter.format(stats.totalSpkrChecked)}
             </p>
-            <p className="mt-2 text-sm text-white/50">SPKR currently saved in Supabase</p>
+            <p className="mt-2 text-sm text-white/50">total SPKR checked</p>
           </div>
 
           <div className="glass-card rounded-[32px] border border-white/10 p-7">
@@ -248,7 +245,7 @@ export default async function SpadminPage({
             <p className="text-4xl font-display font-black tracking-tight">
               {numberFormatter.format(stats.totalWallets)}
             </p>
-            <p className="mt-2 text-sm text-white/50">Unique wallets with a saved result</p>
+            <p className="mt-2 text-sm text-white/50">Total wallets</p>
           </div>
 
           <div className="glass-card rounded-[32px] border border-white/10 p-7">
