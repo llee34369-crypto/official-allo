@@ -80,14 +80,13 @@ function LoginCard({ error }: { error: string | null }) {
               Home
             </Link>
             <p className="mb-4 text-[11px] font-black uppercase tracking-[0.45em] text-brand-red-glow">
-              SpeakerAI Admin
+              SpeakerAI
             </p>
             <h1 className="max-w-[10ch] text-5xl font-display font-black leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
               Protected admin dashboard.
             </h1>
             <p className="mt-6 max-w-2xl text-lg text-white/60">
-              Enter the admin password to view wallet totals and SPKR allocation
-              stats saved from the allocation checker.
+              
             </p>
           </div>
 
@@ -97,12 +96,12 @@ function LoginCard({ error }: { error: string | null }) {
                 <LockKeyhole className="h-8 w-8 text-brand-red-glow" />
               </div>
               <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[10px] font-black uppercase tracking-[0.3em] text-white/50">
-                Password Gate
+                PRIVATE
               </span>
             </div>
 
             <h2 className="mb-3 text-3xl font-display font-black tracking-tight">
-              Access `/spadmin`
+              
             </h2>
             <p className="mb-8 text-sm leading-relaxed text-white/55">
               This page is only for authorized personnel and internal use.
@@ -118,7 +117,7 @@ function LoginCard({ error }: { error: string | null }) {
             <form action="/spadmin/login" method="post" className="space-y-5">
               <label className="block">
                 <span className="mb-3 block text-[11px] font-black uppercase tracking-[0.35em] text-white/45">
-                  Admin Password
+                  Password
                 </span>
                 <input
                   type="password"
@@ -134,7 +133,7 @@ function LoginCard({ error }: { error: string | null }) {
                 type="submit"
                 className="w-full rounded-2xl bg-brand-red px-5 py-4 text-sm font-black uppercase tracking-[0.28em] text-white transition-all hover:bg-brand-red-glow"
               >
-                Unlock Dashboard
+                Unlock
               </button>
             </form>
           </div>
