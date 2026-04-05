@@ -17,7 +17,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.speakerai.org';
 
 export const metadata: Metadata = {
   title: 'SpeakerAI Protocol',
-  description: 'Speaker AI Official Website',
+  description: 'Check your SpeakerAI allocation and explore the protocol.',
   metadataBase: new URL(siteUrl),
   openGraph: {
     title: 'SpeakerAI Protocol',
