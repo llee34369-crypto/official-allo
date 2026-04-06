@@ -783,7 +783,7 @@ export default function LandingPage() {
               </div>
               <div className="rounded-[32px] border border-brand-red/30 bg-brand-red/10 px-10 py-8 red-glow">
                 <p className="text-[11px] text-white/40 uppercase tracking-[0.4em] font-black mb-3">Total Supply</p>
-                <p className="text-5xl font-display font-black text-brand-red-glow tracking-tighter">{TOTAL_SUPPLY.toLocaleString()}</p>
+                <p className="text-5xl font-display font-black text-brand-red-glow tracking-tighter">{TOTAL_SUPPLY.toLocaleString()} SPKR</p>
                 <p className="text-xs text-white/30 font-black tracking-widest mt-1">SPKR TOKENS</p>
               </div>
             </div>
@@ -1007,6 +1007,7 @@ export default function LandingPage() {
                 <span className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black mb-2">Protocol</span>
                 <Link href="/documentation" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Documentation</Link>
                 <Link href="/allocation" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Allocation</Link>
+                <Link href="/whitelist" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Whitelist</Link>
                 <a href={SOCIAL_LINKS.website} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Website</a>
               </div>
               <div className="flex flex-col gap-4">
@@ -1018,11 +1019,21 @@ export default function LandingPage() {
               <div className="flex flex-col gap-4">
                 <span className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black mb-2">Supply</span>
                 <div className="flex flex-col">
-                  <span className="text-lg font-display font-black text-brand-red-glow leading-none">{AIRDROP_POOL.toLocaleString()}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-display font-black text-brand-red-glow leading-none">{AIRDROP_POOL.toLocaleString()}</span>
+                    <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black tracking-[0.28em] text-white/45 uppercase leading-none">
+                      SPKR
+                    </span>
+                  </div>
                   <span className="text-[9px] text-white/30 font-black tracking-widest mt-1">AIRDROP POOL</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-lg font-display font-black text-white leading-none">{TOTAL_SUPPLY.toLocaleString()}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-display font-black text-white leading-none">{TOTAL_SUPPLY.toLocaleString()}</span>
+                    <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black tracking-[0.28em] text-white/45 uppercase leading-none">
+                      SPKR
+                    </span>
+                  </div>
                   <span className="text-[9px] text-white/30 font-black tracking-widest mt-1">TOTAL SUPPLY</span>
                 </div>
               </div>

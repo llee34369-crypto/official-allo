@@ -17,6 +17,10 @@ import {
   isSpadminAuthenticated,
   isSpadminConfigured,
 } from '@/lib/spadmin-auth';
+import {
+  getWhitelistEntryCount,
+  isWhitelistSupabaseConfigured,
+} from '@/lib/whitelist-supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +32,7 @@ interface AdminStats {
   eligibleWallets: number;
   totalTransactions: number;
   lastCheckedAt: string | null;
+  whitelistUsers: number;
 }
 
 const emptyStats: AdminStats = {
@@ -36,6 +41,7 @@ const emptyStats: AdminStats = {
   eligibleWallets: 0,
   totalTransactions: 0,
   lastCheckedAt: null,
+  whitelistUsers: 0,
 };
 
 function formatErrorMessage(error: string | string[] | undefined) {
@@ -169,19 +175,44 @@ export default async function SpadminPage({
   }
 
   let stats: AdminStats = emptyStats;
-  let dataError: string | null = null;
+  const dataErrors: string[] = [];
 
   if (!isSupabaseConfigured()) {
-    dataError = 'SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing in your .env.';
+    dataErrors.push('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing in your .env.');
   } else {
     try {
-      stats = await getSpadminStats();
+      const spadminStats = await getSpadminStats();
+      stats = {
+        ...stats,
+        ...spadminStats,
+      };
     } catch (error) {
       console.error('Unable to load spadmin stats:', error);
-      dataError =
+      dataErrors.push(
         error instanceof Error
           ? error.message
-          : 'Unable to load admin stats right now.';
+          : 'Unable to load admin stats right now.'
+      );
+    }
+  }
+
+  if (!isWhitelistSupabaseConfigured()) {
+    dataErrors.push(
+      'WHITELIST_SUPABASE_URL or WHITELIST_SUPABASE_SERVICE_ROLE_KEY is missing in your .env.'
+    );
+  } else {
+    try {
+      stats = {
+        ...stats,
+        whitelistUsers: await getWhitelistEntryCount(),
+      };
+    } catch (error) {
+      console.error('Unable to load whitelist stats:', error);
+      dataErrors.push(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load whitelist stats right now.'
+      );
     }
   }
 
@@ -227,14 +258,14 @@ export default async function SpadminPage({
           </div>
         </div>
 
-        {dataError ? (
+        {dataErrors.length > 0 ? (
           <div className="mb-8 flex items-start gap-3 rounded-3xl border border-red-500/20 bg-red-500/10 px-5 py-5 text-sm text-red-100">
             <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
-            <span>{dataError}</span>
+            <span>{dataErrors.join(' ')}</span>
           </div>
         ) : null}
 
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-6">
           <div className="glass-card rounded-[32px] border border-brand-red/25 p-7">
             <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-red/15">
               <Coins className="h-7 w-7 text-brand-red-glow" />
@@ -272,6 +303,19 @@ export default async function SpadminPage({
               {numberFormatter.format(stats.eligibleWallets)}
             </p>
             <p className="mt-2 text-sm text-white/50">Wallets meeting the snapshot threshold</p>
+          </div>
+
+          <div className="glass-card rounded-[32px] border border-white/10 p-7">
+            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
+              <Wallet className="h-7 w-7 text-white/80" />
+            </div>
+            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
+              Whitelist Users
+            </p>
+            <p className="text-4xl font-display font-black tracking-tight">
+              {numberFormatter.format(stats.whitelistUsers)}
+            </p>
+            <p className="mt-2 text-sm text-white/50">Users in the testnet whitelist</p>
           </div>
 
           <div className="glass-card rounded-[32px] border border-white/10 p-7">
