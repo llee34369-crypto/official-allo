@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronRight,
+  LoaderCircle,
   Wallet,
   Zap,
 } from 'lucide-react';
@@ -87,6 +88,18 @@ export default function WhitelistPage() {
     setSubmissionState('success');
     setMessage(`This wallet address is already submitted ${storedWallet}.`);
   }, []);
+
+  useEffect(() => {
+    if (!message || submissionState === 'loading') {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setMessage('');
+    }, 4000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [message, submissionState]);
 
   const submitWhitelist = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -259,24 +272,28 @@ export default function WhitelistPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  type="submit"
-                  disabled={
-                    submissionState === 'loading' ||
-                    hasSubmittedOnThisBrowser ||
-                    !isConnected ||
-                    !address
-                  }
-                  className="px-6 py-4 bg-brand-red hover:bg-brand-red-glow text-white rounded-2xl text-sm font-black uppercase tracking-[0.28em] transition-all disabled:opacity-60"
-                >
-                  {submissionState === 'loading'
-                    ? 'Confirming...'
-                    : hasSubmittedOnThisBrowser
-                      ? 'Already Confirmed'
-                      : 'Confirm Wallet & Join'}
-                </button>
-
-                {!isConnected && !hasSubmittedOnThisBrowser ? (
+                {isConnected ? (
+                  <button
+                    type="submit"
+                    disabled={
+                      submissionState === 'loading' ||
+                      hasSubmittedOnThisBrowser ||
+                      !address
+                    }
+                    className="px-6 py-4 bg-brand-red hover:bg-brand-red-glow text-white rounded-2xl text-sm font-black uppercase tracking-[0.28em] transition-all disabled:opacity-60"
+                  >
+                    {submissionState === 'loading' ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <LoaderCircle className="w-4 h-4 animate-spin" />
+                        Confirming
+                      </span>
+                    ) : hasSubmittedOnThisBrowser ? (
+                      'Whitelisted'
+                    ) : (
+                      'Confirm Wallet & Join'
+                    )}
+                  </button>
+                ) : (
                   <button
                     type="button"
                     onClick={connectWallet}
@@ -285,7 +302,7 @@ export default function WhitelistPage() {
                     Connect Wallet
                     <ChevronRight className="w-4 h-4" />
                   </button>
-                ) : null}
+                )}
               </div>
 
               <p className="text-sm text-white/45">

@@ -783,7 +783,7 @@ export default function LandingPage() {
               </div>
               <div className="rounded-[32px] border border-brand-red/30 bg-brand-red/10 px-10 py-8 red-glow">
                 <p className="text-[11px] text-white/40 uppercase tracking-[0.4em] font-black mb-3">Total Supply</p>
-                <p className="text-5xl font-display font-black text-brand-red-glow tracking-tighter">{TOTAL_SUPPLY.toLocaleString()} SPKR</p>
+                <p className="text-5xl font-display font-black text-brand-red-glow tracking-tighter">{TOTAL_SUPPLY.toLocaleString()} </p>
                 <p className="text-xs text-white/30 font-black tracking-widest mt-1">SPKR TOKENS</p>
               </div>
             </div>
