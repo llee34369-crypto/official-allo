@@ -1,27 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
+import { useAccount, useDisconnect, useSignMessage } from 'wagmi';
+import { useWeb3Modal } from '@web3modal/wagmi/react';
 import {
-  ArrowRight,
-  AudioLines,
-  BookOpenText,
-  BrainCircuit,
-  Coins,
-  Mic,
-  Network,
-  Rocket,
-  ShieldCheck,
-  Sparkles,
-  Volume2,
-  Waypoints,
-  Zap,
+  ArrowLeft,
+  CheckCircle2,
   ChevronRight,
+  LoaderCircle,
+  Wallet,
+  Zap,
 } from 'lucide-react';
 
-const TOTAL_SUPPLY = 100000000;
-const AIRDROP_POOL = 15000000;
+import { getWhitelistConfirmationMessage } from '@/lib/whitelist-message';
+
+type SubmissionState = 'idle' | 'loading' | 'success' | 'error';
+
+const TESTNET_AIRDROP_POOL = 10000000;
+const WHITELIST_SUBMITTED_WALLET_KEY = 'speakerai-testnet-whitelist-wallet';
 
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
@@ -29,105 +27,7 @@ const SOCIAL_LINKS = {
   discord: 'https://discord.gg/tyAE9eeE8c',
 } as const;
 
-const productPillars = [
-  {
-    eyebrow: 'Capture',
-    title: 'Voice becomes structured, searchable intelligence.',
-    description:
-      'SpeakerAI turns raw conversations, recordings, and live speech into usable data that can power apps, workflows, and decision-making.',
-    icon: Mic,
-  },
-  {
-    eyebrow: 'Generate',
-    title: 'AI responses, summaries, and audio content in one layer.',
-    description:
-      'The protocol is designed for real output: transcription, summarization, conversational replies, and AI-assisted audio creation.',
-    icon: BrainCircuit,
-  },
-  {
-    eyebrow: 'Reward',
-    title: 'Usage and ecosystem participation connect to token utility.',
-    description:
-      'Blockchain infrastructure gives SpeakerAI transparent incentives, on-chain verification, and an economy around access, rewards, and growth.',
-    icon: Coins,
-  },
-] as const;
-
-const useCases = [
-  {
-    title: 'For Creators',
-    text: 'Capture spoken ideas fast, generate polished scripts, and turn audio-first workflows into publishable content.',
-  },
-  {
-    title: 'For Developers',
-
-
-    text: 'Plug voice AI into dApps, dashboards, and products with APIs, SDKs, and tokenized ecosystem mechanics.',
-  },
-  {
-    title: 'For Businesses',
-    text: 'Analyze voice interactions, automate audio-heavy workflows, and turn conversations into measurable insight.',
-  },
-] as const;
-
-const tokenUtilities = [
-  'Access advanced AI features and premium protocol services',
-  'Receive ecosystem incentives and airdrop rewards',
-  'Stake SPKR to support participation and future network mechanics',
-  'Take part in protocol governance as the ecosystem expands',
-] as const;
-
-const tokenomics = [
-  {
-    label: 'Liquidity & Ecosystem',
-    amount: 60000000,
-    percent: 60,
-    color: '#8b0000',
-    description: 'Supports liquidity, platform rewards, partnerships, grants, and long-term expansion.',
-  },
-  {
-    label: 'Community Airdrop',
-    amount: 15000000,
-    percent: 15,
-    color: '#b80f0a',
-    description: 'Reserved to reward active early participants and bootstrap adoption.',
-  },
-  {
-    label: 'Team Allocation',
-    amount: 10000000,
-    percent: 10,
-    color: '#d72614',
-    description: 'Aligns core builders with the long-term success of the SpeakerAI Protocol.',
-  },
-  {
-    label: 'Future Airdrops',
-    amount: 5000000,
-    percent: 5,
-    color: '#f04a24',
-    description: 'Held back for future campaigns, community growth, and strategic distribution.',
-  },
-  {
-    label: 'Presale Round 1',
-    amount: 5000000,
-    percent: 5,
-    color: '#ff6f3c',
-    description: 'Early capital and community support at the earliest access stage.',
-  },
-  {
-    label: 'Presale Round 2',
-    amount: 5000000,
-    percent: 5,
-    color: '#ff9b66',
-    description: 'Broader market access before public-scale growth and ecosystem rollout.',
-  },
-] as const;
-
-const roadmap = [
-  'Advanced voice models with stronger natural language understanding',
-  'Mobile experiences for iOS and Android',
-  'Developer SDKs and API integrations for third-party products',
-  'DAO-style governance and broader multichain compatibility',
-] as const;
+const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
 function XLogo(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -145,840 +45,289 @@ function DiscordLogo(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-function hexToRgb(hex: string) {
-  const sanitized = hex.replace('#', '');
-  const normalized = sanitized.length === 3 ? sanitized.split('').map((char) => char + char).join('') : sanitized;
-  const value = Number.parseInt(normalized, 16);
-
-  return {
-    r: (value >> 16) & 255,
-    g: (value >> 8) & 255,
-    b: value & 255,
-  };
-}
-
-function darkenHex(hex: string, factor = 0.58) {
-  const { r, g, b } = hexToRgb(hex);
-  return `rgb(${Math.round(r * factor)}, ${Math.round(g * factor)}, ${Math.round(b * factor)})`;
-}
-
-function polarToCartesian(cx: number, cy: number, radius: number, angle: number) {
-  const radians = ((angle - 90) * Math.PI) / 180;
-
-  return {
-    x: cx + radius * Math.cos(radians),
-    y: cy + radius * Math.sin(radians),
-  };
-}
-
-function describeDonutSlice(
-  cx: number,
-  cy: number,
-  outerRadius: number,
-  innerRadius: number,
-  startAngle: number,
-  endAngle: number
-) {
-  const outerStart = polarToCartesian(cx, cy, outerRadius, startAngle);
-  const outerEnd = polarToCartesian(cx, cy, outerRadius, endAngle);
-  const innerStart = polarToCartesian(cx, cy, innerRadius, startAngle);
-  const innerEnd = polarToCartesian(cx, cy, innerRadius, endAngle);
-  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
-
-  return [
-    `M ${outerStart.x} ${outerStart.y}`,
-    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${outerEnd.x} ${outerEnd.y}`,
-    `L ${innerEnd.x} ${innerEnd.y}`,
-    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerStart.x} ${innerStart.y}`,
-    'Z',
-  ].join(' ');
-}
-
-function describeRadialFace(
-  cx: number,
-  cy: number,
-  outerRadius: number,
-  innerRadius: number,
-  angle: number,
-  thickness: number
-) {
-  const outerTop = polarToCartesian(cx, cy, outerRadius, angle);
-  const innerTop = polarToCartesian(cx, cy, innerRadius, angle);
-  const outerBottom = polarToCartesian(cx, cy + thickness, outerRadius, angle);
-  const innerBottom = polarToCartesian(cx, cy + thickness, innerRadius, angle);
-
-  return [
-    `M ${outerTop.x} ${outerTop.y}`,
-    `L ${innerTop.x} ${innerTop.y}`,
-    `L ${innerBottom.x} ${innerBottom.y}`,
-    `L ${outerBottom.x} ${outerBottom.y}`,
-    'Z',
-  ].join(' ');
-}
-
-function describeWall(
-  cx: number,
-  cy: number,
-  radius: number,
-  startAngle: number,
-  endAngle: number,
-  thickness: number
-) {
-  const topStart = polarToCartesian(cx, cy, radius, startAngle);
-  const topEnd = polarToCartesian(cx, cy, radius, endAngle);
-  const bottomStart = polarToCartesian(cx, cy + thickness, radius, startAngle);
-  const bottomEnd = polarToCartesian(cx, cy + thickness, radius, endAngle);
-  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
-
-  return [
-    `M ${topStart.x} ${topStart.y}`,
-    `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${topEnd.x} ${topEnd.y}`,
-    `L ${bottomEnd.x} ${bottomEnd.y}`,
-    `A ${radius} ${radius} 0 ${largeArcFlag} 0 ${bottomStart.x} ${bottomStart.y}`,
-    'Z',
-  ].join(' ');
-}
-
-function TokenomicsChart() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [tilt, setTilt] = useState({ rotateX: 22, rotateY: -10 });
-
-  const centerX = 170;
-  const centerY = 170;
-  const outerRadius = 125;
-  const innerRadius = 45;
-  const thickness = 40;
-  // High density layers for a solid look
-  const extrusionLayers = Array.from({ length: 20 }, (_, i) => (i + 1) * 2);
-
-  interface TokenomicsSlice {
-    label: string;
-    amount: number;
-    percent: number;
-    color: string;
-    description: string;
-    index: number;
-    startAngle: number;
-    endAngle: number;
-    midAngle: number;
-    offsetX: number;
-    offsetY: number;
-    topPath: string;
+function getFriendlyErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return 'Unable to submit whitelist entry.';
   }
 
-  const slices: TokenomicsSlice[] = [];
-  let accumulatedAngle = -90;
+  const normalizedMessage = error.message.toLowerCase();
 
-  for (let index = 0; index < tokenomics.length; index++) {
-    const slice = tokenomics[index];
-    const sliceAngle = (slice.percent / 100) * 360;
-    const startAngle = accumulatedAngle;
-    const endAngle = accumulatedAngle + sliceAngle;
-    const midAngle = startAngle + sliceAngle / 2;
-    const offsetDistance = activeIndex === index ? 15 : 0;
-    const radians = ((midAngle - 90) * Math.PI) / 180;
-    const offsetX = Math.cos(radians) * offsetDistance;
-    const offsetY = Math.sin(radians) * offsetDistance;
-
-    slices.push({
-      ...slice,
-      index,
-      startAngle,
-      endAngle,
-      midAngle,
-      offsetX,
-      offsetY,
-      topPath: describeDonutSlice(centerX, centerY, outerRadius, innerRadius, startAngle, endAngle),
-    });
-
-    accumulatedAngle = endAngle;
+  if (
+    normalizedMessage.includes('user rejected') ||
+    normalizedMessage.includes('user denied') ||
+    normalizedMessage.includes('rejected the request')
+  ) {
+    return 'User rejected.';
   }
 
-  const activeSlice = tokenomics[activeIndex];
+  return error.message;
+}
 
-  const handleChartMove = (event: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    let clientX, clientY;
-    
-    if ('touches' in event) {
-      clientX = event.touches[0].clientX;
-      clientY = event.touches[0].clientY;
-    } else {
-      clientX = event.clientX;
-      clientY = event.clientY;
+export default function WhitelistPage() {
+  const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+  const { open } = useWeb3Modal();
+  const { signMessageAsync } = useSignMessage();
+
+  const [submissionState, setSubmissionState] = useState<SubmissionState>('idle');
+  const [message, setMessage] = useState('');
+  const [submittedWallet, setSubmittedWallet] = useState<string | null>(null);
+
+  const connectWallet = () => open({ view: 'Connect' });
+  const disconnectWallet = () => disconnect();
+  const hasSubmittedOnThisBrowser = Boolean(submittedWallet);
+
+  useEffect(() => {
+    const storedWallet = window.localStorage.getItem(WHITELIST_SUBMITTED_WALLET_KEY);
+
+    if (!storedWallet) {
+      return;
     }
 
-    const relativeX = (clientX - rect.left) / rect.width;
-    const relativeY = (clientY - rect.top) / rect.height;
-    const rotateY = (relativeX - 0.5) * 20;
-    const rotateX = 25 + (0.5 - relativeY) * 15;
+    setSubmittedWallet(storedWallet);
+    setSubmissionState('success');
+    setMessage(`This wallet address is already submitted ${storedWallet}.`);
+  }, []);
 
-    setTilt({ rotateX, rotateY });
+  useEffect(() => {
+    if (!message || submissionState === 'loading') {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setMessage('');
+    }, 4000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [message, submissionState]);
+
+  const submitWhitelist = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (submittedWallet) {
+      setSubmissionState('success');
+      setMessage(`This wallet address is already submitted ${submittedWallet}.`);
+      return;
+    }
+
+    if (!isConnected || !address) {
+      setSubmissionState('error');
+      setMessage('Connect your wallet before submitting to the whitelist.');
+      return;
+    }
+
+    setSubmissionState('loading');
+    setMessage('');
+
+    try {
+      const signature = await signMessageAsync({
+        message: getWhitelistConfirmationMessage(address),
+      });
+
+      const response = await fetch('/api/whitelist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletAddress: address,
+          signature,
+        }),
+      });
+
+      const result = (await response.json()) as {
+        error?: string;
+        status?: 'registered' | 'already_registered';
+      };
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Unable to submit whitelist entry.');
+      }
+
+      const confirmedWallet = address.toLowerCase();
+
+      window.localStorage.setItem(
+        WHITELIST_SUBMITTED_WALLET_KEY,
+        confirmedWallet
+      );
+      setSubmittedWallet(confirmedWallet);
+      setSubmissionState('success');
+      setMessage(
+        result.status === 'already_registered'
+          ? 'That wallet is already on the whitelist.'
+          : 'Wallet added to the testnet whitelist.'
+      );
+    } catch (error) {
+      setSubmissionState('error');
+      setMessage(getFriendlyErrorMessage(error));
+    }
   };
 
-  const resetTilt = () => {
-    setTilt({ rotateX: 22, rotateY: -10 });
-  };
-
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-16 items-start">
-      <div className="flex justify-center">
-        <div className="w-full max-w-[450px]">
-          <div className="relative [perspective:2500px]">
-            {/* Dynamic Shadow */}
-            <motion.div 
-              className="absolute inset-x-10 bottom-0 h-20 bg-black/60 blur-[60px] rounded-full pointer-events-none"
-              animate={{
-                x: -tilt.rotateY * 2,
-                y: tilt.rotateX * 0.5,
-                scale: 1 + (tilt.rotateX - 25) * 0.01
-              }}
-            />
-            
-            <motion.div
-              animate={{ y: [0, -12, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-              className="relative"
-            >
-              <motion.div
-                className="relative will-change-transform"
-                onMouseMove={handleChartMove}
-                onMouseLeave={resetTilt}
-                onTouchMove={handleChartMove}
-                onTouchEnd={resetTilt}
-                onFocus={resetTilt}
-                animate={{
-                  rotateX: tilt.rotateX,
-                  rotateY: tilt.rotateY,
-                }}
-                transition={{ 
-                  rotateX: { type: 'spring', stiffness: 80, damping: 20 },
-                  rotateY: { type: 'spring', stiffness: 80, damping: 20 },
-                }}
-                style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }}
-              >
-                <svg viewBox="0 0 340 400" className="w-full h-auto overflow-visible">
-                  <defs>
-                    <radialGradient id="speakerai-chart-core" cx="50%" cy="35%" r="75%">
-                      <stop offset="0%" stopColor="#5a1111" />
-                      <stop offset="60%" stopColor="#1a0d0d" />
-                      <stop offset="100%" stopColor="#050505" />
-                    </radialGradient>
-                    <linearGradient id="speakerai-chart-sheen" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="rgba(255,255,255,0.6)" />
-                      <stop offset="45%" stopColor="rgba(255,255,255,0.1)" />
-                      <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-                    </linearGradient>
-                    <filter id="glow-strong">
-                      <feGaussianBlur stdDeviation="8" result="blur" />
-                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                    </filter>
-                  </defs>
-
-                  {/* Solid Extrusion (Stacked Layers) */}
-                  {extrusionLayers.map((offset, layerIndex) => (
-                    <g key={`layer-${offset}`} opacity={1 - layerIndex * 0.02}>
-                      {slices.map((slice) => (
-                        <motion.path
-                          key={`${slice.label}-layer-${offset}`}
-                          animate={{ x: slice.offsetX, y: slice.offsetY }}
-                          transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-                          d={describeDonutSlice(centerX, centerY + offset, outerRadius, innerRadius, slice.startAngle, slice.endAngle)}
-                          fill={darkenHex(slice.color, 0.2 + layerIndex * 0.03)}
-                        />
-                      ))}
-                    </g>
-                  ))}
-
-                  {/* Top Faces */}
-                  {slices.map((slice) => (
-                    <motion.g
-                      key={slice.label}
-                      animate={{ 
-                        x: slice.offsetX, 
-                        y: slice.offsetY,
-                        scale: activeIndex === slice.index ? 1.05 : 1
-                      }}
-                      transition={{ type: 'spring', stiffness: 350, damping: 25, mass: 0.7 }}
-                      onMouseEnter={() => setActiveIndex(slice.index)}
-                      onFocus={() => setActiveIndex(slice.index)}
-                      className="cursor-pointer"
-                    >
-                      {/* Main Surface */}
-                      <path
-                        d={slice.topPath}
-                        fill={slice.color}
-                        stroke="rgba(255,255,255,0.2)"
-                        strokeWidth="1"
-                      />
-                      
-                      {/* Holographic Sheen */}
-                      <path
-                        d={slice.topPath}
-                        fill="url(#speakerai-chart-sheen)"
-                        opacity={activeIndex === slice.index ? 0.8 : 0.4}
-                        style={{ mixBlendMode: 'screen' }}
-                      />
-                      
-                      {/* Active Highlight Border */}
-                      {activeIndex === slice.index && (
-                        <path
-                          d={slice.topPath}
-                          fill="none"
-                          stroke="white"
-                          strokeWidth="3"
-                          opacity="0.5"
-                          filter="url(#glow-strong)"
-                        />
-                      )}
-                    </motion.g>
-                  ))}
-
-                  {/* Center Core */}
-                  <g pointerEvents="none">
-                    <circle cx={centerX} cy={centerY + 20} r={48} fill="rgba(0,0,0,0.6)" />
-                    <circle cx={centerX} cy={centerY + 10} r={48} fill="rgba(140,20,20,0.95)" />
-                    <circle cx={centerX} cy={centerY} r={46} fill="url(#speakerai-chart-core)" stroke="rgba(255,255,255,0.25)" strokeWidth="3" />
-                    <text x={centerX} y={centerY - 6} textAnchor="middle" className="fill-white/40 text-[10px] font-black tracking-[0.5em] uppercase">
-                      SPKR
-                    </text>
-                    <text x={centerX} y={centerY + 24} textAnchor="middle" className="fill-brand-red-glow text-[30px] font-black tracking-tighter">
-                      {activeSlice.percent}%
-                    </text>
-                  </g>
-                </svg>
-              </motion.div>
-            </motion.div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#0a0a0a] text-white selection:bg-brand-red selection:text-white overflow-x-hidden">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-red/10 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[0%] w-[40%] h-[40%] bg-brand-red/10 blur-[120px] rounded-full" />
+        <div className="absolute top-[20%] right-[10%] w-[20%] h-[20%] bg-brand-red/5 blur-[80px] rounded-full" />
       </div>
 
-      <div className="space-y-6">
-        <div className="relative min-h-[350px] sm:min-h-[330px] lg:min-h-[360px]">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeIndex}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="absolute inset-0 glass-card rounded-[40px] p-8 sm:p-10 border-brand-red/40 bg-[linear-gradient(165deg,rgba(139,0,0,0.2),rgba(15,15,15,0.95))] grid grid-rows-[auto_auto_auto_1fr]"
-            >
-              <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.4em] font-black mb-4">Allocation Details</p>
-              <h3 className="text-3xl sm:text-4xl lg:text-[2.8rem] xl:text-5xl font-display font-black mb-5 tracking-tight leading-[0.95] max-w-[11ch]">
-                {activeSlice.label}
-              </h3>
-              <div className="flex flex-wrap items-end gap-x-3 gap-y-2 mb-5">
-                <span className="text-4xl sm:text-5xl lg:text-[3rem] xl:text-5xl font-display font-black text-white leading-none">
-                  {activeSlice.amount.toLocaleString()}
-                </span>
-                <span className="text-white/40 font-bold tracking-widest">SPKR</span>
-              </div>
-              <p className="self-end text-white/70 text-base sm:text-lg lg:text-base xl:text-lg leading-relaxed max-w-[30ch] pr-2">
-                {activeSlice.description}
-              </p>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-fr">
-          {tokenomics.map((slice, index) => (
-            <button
-              key={slice.label}
-              onMouseEnter={() => setActiveIndex(index)}
-              onFocus={() => setActiveIndex(index)}
-              onClick={() => setActiveIndex(index)}
-              className={`group text-left rounded-[28px] border p-5 transition-all duration-300 min-h-[128px] h-full flex flex-col justify-between ${
-                activeIndex === index
-                  ? 'border-brand-red/50 bg-brand-red/15 red-glow scale-[1.02]'
-                  : 'border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <span className="inline-flex items-center gap-3 text-sm font-black tracking-tight">
-                  <span className="w-4 h-4 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.2)]" style={{ backgroundColor: slice.color }} />
-                  {slice.label}
-                </span>
-                <span className={`text-lg font-black transition-colors ${activeIndex === index ? 'text-brand-red-glow' : 'text-white/40'}`}>
-                  {slice.percent}%
-                </span>
-              </div>
-              <p className="text-xs text-white/40 font-mono">{slice.amount.toLocaleString()} SPKR</p>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SectionHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description?: string }) {
-  return (
-    <div className="mb-12 max-w-3xl">
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-red/20 bg-brand-red/10 text-[10px] font-black uppercase tracking-[0.4em] text-brand-red mb-4"
-      >
-        {eyebrow}
-      </motion.div>
-      <motion.h2 
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ delay: 0.1 }}
-        className="text-4xl lg:text-6xl font-display font-black tracking-tight mb-6 leading-[1.1]"
-      >
-        {title}
-      </motion.h2>
-      {description && (
-        <motion.p 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.2 }}
-          className="text-white/60 text-lg lg:text-xl leading-relaxed"
-        >
-          {description}
-        </motion.p>
-      )}
-    </div>
-  );
-}
-
-export default function LandingPage() {
-  return (
-    <div className="min-h-screen bg-[#050505] text-white selection:bg-brand-red selection:text-white overflow-x-hidden font-sans">
-      {/* Background Elements */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 transform-gpu translate-z-0">
-        <div className="absolute inset-0 bg-grid opacity-[0.15] mask-radial will-change-transform translate-z-0" />
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-brand-red/15 blur-[160px] rounded-full will-change-transform translate-z-0" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-brand-red/10 blur-[160px] rounded-full will-change-transform translate-z-0" />
-        <div className="absolute top-[30%] right-[5%] w-[30%] h-[30%] bg-brand-red/5 blur-[120px] rounded-full will-change-transform translate-z-0" />
-      </div>
-
-      <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/5 bg-black/60 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-brand-red rounded-xl flex items-center justify-center red-glow-strong">
+      <nav className="relative z-10 border-b border-white/5 bg-black/40 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-brand-red rounded-lg flex items-center justify-center red-glow">
               <Zap className="text-white w-6 h-6 fill-current" />
             </div>
-            <span className="text-2xl font-display font-black tracking-tighter uppercase">
+            <span className="text-2xl font-display font-bold tracking-tighter">
               SPEAKER<span className="text-brand-red">AI</span>
             </span>
           </div>
 
-          <div className="hidden lg:flex items-center gap-2">
-            <a href="#about" className="px-5 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-white/50 hover:text-white transition-colors">
-              About
-            </a>
-            <a href="#tokenomics" className="px-5 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-white/50 hover:text-white transition-colors">
-              Tokenomics
-            </a>
-            <Link
-              href="/documentation"
-              prefetch
-              className="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[11px] font-black uppercase tracking-[0.2em] transition-all ml-4"
-            >
-              Docs
-            </Link>
-            <Link
-              href="/allocation"
-              prefetch
-              className="px-7 py-3 bg-brand-red hover:bg-brand-red-glow text-white rounded-full text-xs font-black uppercase tracking-widest transition-all red-glow ml-2"
-            >
-              Allocation
-            </Link>
-          </div>
+          <Link
+            href="/"
+            prefetch
+            className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Home
+          </Link>
         </div>
       </nav>
 
-      <main className="relative z-10 pt-32 pb-24">
-        {/* Hero Section */}
-        <section className="max-w-7xl mx-auto px-6 lg:px-8 mb-32">
-          <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-16 items-center">
-            <motion.div 
-              initial={{ opacity: 0, x: -30 }} 
-              animate={{ opacity: 1, x: 0 }} 
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            >
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-brand-red/30 bg-brand-red/10 text-[11px] font-black uppercase tracking-[0.4em] text-brand-red-glow mb-8">
-                <Sparkles className="w-4 h-4 animate-pulse" />
-                SpeakerAI Protocol
-              </div>
-              <h1 className="text-6xl sm:text-7xl lg:text-[100px] font-display font-black tracking-tight leading-[0.85] mb-8">
-                VOICE AS
-                <br />
-                <span className="text-brand-red text-glow">INFRASTRUCTURE</span>
-                <br />
-                FOR WEB3.
-              </h1>
-              <p className="text-white/60 text-xl lg:text-2xl max-w-2xl leading-relaxed mb-12">
-                SpeakerAI is building a decentralized voice and audio protocol where AI processing,
-                conversational intelligence, and on-chain incentives work as one product layer.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-5">
-                <Link
-                  href="/allocation"
-                  prefetch
-                  className="px-10 py-5 bg-brand-red hover:bg-brand-red-glow text-white rounded-full text-lg font-black transition-all red-glow-strong inline-flex items-center justify-center gap-4 group"
-                >
-                  CHECK ALLOCATION
-                  <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-                </Link>
-                <Link
-                  href="/documentation"
-                  prefetch
-                  className="px-10 py-5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-lg font-black transition-all inline-flex items-center justify-center gap-4"
-                >
-                  READ DOCUMENTATION
-                </Link>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, rotateY: 15 }}
-              animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-              transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
-              className="relative perspective-1000"
-            >
-              
-              
-              {/* Decorative Floating Elements */}
-              <motion.div 
-                animate={{ y: [0, -20, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute -top-10 -right-10 w-24 h-24 bg-brand-red/20 blur-3xl rounded-full" 
-              />
-              <motion.div 
-                animate={{ y: [0, 20, 0] }}
-                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                className="absolute -bottom-10 -left-10 w-32 h-32 bg-brand-red/10 blur-3xl rounded-full" 
-              />
-            </motion.div>
-          </div>
-        </section>
-
-        {/* About Section */}
-        <section id="about" className="max-w-7xl mx-auto px-6 lg:px-8 mb-32 scroll-mt-32">
-          <div className="grid grid-cols-1 xl:grid-cols-[0.8fr_1.2fr] gap-8">
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="glass-card rounded-[48px] p-10 lg:p-14 border-white/10 bg-[linear-gradient(165deg,rgba(20,20,20,0.8),rgba(10,10,10,0.95))]"
-            >
-              <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.5em] font-black mb-6">About SpeakerAI</p>
-              <h2 className="text-5xl lg:text-6xl font-display font-black mb-8 tracking-tight leading-[1.05]">A product-first protocol for intelligent voice ecosystems.</h2>
-              <p className="text-white/70 text-xl leading-relaxed mb-8">
-                SpeakerAI is not just a dashboard and not just a token. The idea is to create a voice-native
-                product layer where audio can be captured, processed, analyzed, and monetized in a transparent ecosystem.
-              </p>
-              <p className="text-white/50 text-lg leading-relaxed">
-                The landing page builds on the core ideas from the documentation,
-                presenting the product as a unified system—combining AI voice tools, developer integrations, on-chain ownership, and token-based participation.
-                
-              </p>
-            </motion.div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {productPillars.map((pillar, idx) => {
-                const Icon = pillar.icon;
-                return (
-                  <motion.div 
-                    key={pillar.title}
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: idx * 0.1 }}
-                    className="glass-card rounded-[40px] p-10 flex flex-col border-white/5 hover:border-brand-red/30 transition-colors group"
-                  >
-                    <p className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black mb-8">{pillar.eyebrow}</p>
-                    <div className="w-16 h-16 rounded-[24px] bg-brand-red/10 border border-brand-red/20 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500">
-                      <Icon className="w-8 h-8 text-brand-red" />
-                    </div>
-                    <h3 className="text-2xl font-display font-black mb-6 leading-tight">{pillar.title}</h3>
-                    <p className="text-white/60 leading-relaxed text-lg">{pillar.description}</p>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        {/* Features Section */}
-        <section className="max-w-7xl mx-auto px-6 lg:px-8 mb-32">
-          <SectionHeader 
-            eyebrow="Product Delivery"
-            title="Built around real audio workflows, not generic AI promises."
-            description="The SpeakerAI experience is meant to feel like a live system: voice in, intelligence out, transparent protocol beneath it."
-          />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              className="glass-card rounded-[48px] p-10 lg:p-12 border-brand-red/30 bg-[linear-gradient(180deg,rgba(139,0,0,0.15),rgba(10,10,10,0.95))] relative overflow-hidden group"
-            >
-              <div className="absolute top-0 right-0 w-64 h-64 bg-brand-red/10 blur-[100px] -mr-32 -mt-32 group-hover:bg-brand-red/20 transition-colors" />
-              <div className="relative flex flex-col h-full">
-                <div className="flex items-center gap-6 mb-10">
-                  <div className="w-20 h-20 rounded-[28px] bg-brand-red/15 border border-brand-red/30 flex items-center justify-center shadow-2xl">
-                    <BookOpenText className="w-10 h-10 text-brand-red-glow" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.4em] font-black mb-2">AI Output</p>
-                    <h3 className="text-3xl lg:text-4xl font-display font-black tracking-tight">Content generation with context</h3>
-                  </div>
-                </div>
-                <p className="text-white/70 text-xl leading-relaxed mt-auto">
-                  Instead of isolated tools, SpeakerAI is designed as a pipeline where recordings can become transcripts,
-                  summaries, analytics, responses, and publishable outputs in one ecosystem.
-                </p>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="glass-card rounded-[48px] p-10 lg:p-12 border-white/10 bg-[linear-gradient(180deg,rgba(30,30,30,0.4),rgba(10,10,10,0.95))] relative overflow-hidden group"
-            >
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 blur-[100px] -mr-32 -mt-32 group-hover:bg-white/10 transition-colors" />
-              <div className="relative flex flex-col h-full">
-                <div className="flex items-center gap-6 mb-10">
-                  <div className="w-20 h-20 rounded-[28px] bg-white/5 border border-white/10 flex items-center justify-center shadow-2xl">
-                    <Network className="w-10 h-10 text-brand-red" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-white/40 uppercase tracking-[0.4em] font-black mb-2">Protocol Utility</p>
-                    <h3 className="text-3xl lg:text-4xl font-display font-black tracking-tight">Blockchain where it matters</h3>
-                  </div>
-                </div>
-                <p className="text-white/70 text-xl leading-relaxed mt-auto">
-                  On-chain design is used for trust, participation, incentives, and ownership rather than decoration. That gives the product a transparent economy around usage and growth.
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* Tokenomics Section */}
-        <section id="tokenomics" className="max-w-7xl mx-auto px-6 lg:px-8 mb-32 scroll-mt-32">
-          <motion.div 
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="glass-card rounded-[60px] p-10 lg:p-20 border-white/10 bg-[linear-gradient(165deg,rgba(15,15,15,0.8),rgba(5,5,5,0.98))]"
+      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
+        <section className="text-center mb-12 lg:mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
           >
-            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-10 mb-20">
-              <div className="max-w-3xl">
-                <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.5em] font-black mb-6">Tokenomics</p>
-                <h2 className="text-5xl lg:text-7xl font-display font-black mb-8 tracking-tight leading-[1.05]">SPKR is designed to fund adoption, reward users, and scale the protocol.</h2>
-                <p className="text-white/60 text-xl leading-relaxed">
-                  Hover the chart to explore each allocation.
-                </p>
-              </div>
-              <div className="rounded-[32px] border border-brand-red/30 bg-brand-red/10 px-10 py-8 red-glow">
-                <p className="text-[11px] text-white/40 uppercase tracking-[0.4em] font-black mb-3">Total Supply</p>
-                <p className="text-5xl font-display font-black text-brand-red-glow tracking-tighter">{TOTAL_SUPPLY.toLocaleString()} </p>
-                <p className="text-xs text-white/30 font-black tracking-widest mt-1">SPKR TOKENS</p>
-              </div>
-            </div>
-
-            <TokenomicsChart />
+            <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.45em] font-black mb-5">
+              Testnet Whitelist
+            </p>
+            <h1 className="text-5xl lg:text-8xl font-display font-black tracking-tight mb-6 leading-[0.9]">
+              JOIN THE <span className="text-brand-red">SPEAKERAI</span> TESTNET WHITELIST
+            </h1>
+            <p className="text-white/60 text-lg lg:text-xl max-w-2xl mx-auto">
+              Submit your wallet to get whitelisted in SpeakerAI Testnet.
+            </p>
           </motion.div>
         </section>
 
-        {/* Utility & Use Cases */}
-        <section className="max-w-7xl mx-auto px-6 lg:px-8 mb-32">
-          <div className="grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-10">
-            <motion.div 
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              className="glass-card rounded-[48px] p-10 lg:p-14 border-white/10"
-            >
-              <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.5em] font-black mb-8">SPKR Utility</p>
-              <h2 className="text-4xl lg:text-5xl font-display font-black mb-10 tracking-tight">Utility built for ecosystem motion.</h2>
-              <div className="space-y-4">
-                {tokenUtilities.map((item, idx) => (
-                  <motion.div 
-                    key={item} 
-                    initial={{ opacity: 0, x: -20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: idx * 0.1 }}
-                    className="group rounded-[32px] border border-white/5 bg-white/5 p-7 text-white/70 text-lg leading-relaxed hover:bg-white/10 hover:border-white/20 transition-all flex items-center gap-5"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-brand-red/10 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                      <ChevronRight className="w-5 h-5 text-brand-red" />
-                    </div>
-                    {item}
-                  </motion.div>
-                ))}
+        <div className="max-w-3xl mx-auto">
+          <section className="glass-card rounded-[40px] p-8 lg:p-10">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-brand-red/15 rounded-3xl flex items-center justify-center red-glow">
+                  <Wallet className="w-8 h-8 text-brand-red-glow" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-white/35 uppercase tracking-[0.35em] font-black mb-2">
+                    Whitelist Form
+                  </p>
+                  <h2 className="text-3xl font-display font-black tracking-tight">
+                    Connect your wallet
+                  </h2>
+                </div>
               </div>
-            </motion.div>
+              {isConnected ? (
+                <span className="px-3 py-1 bg-green-500/10 text-green-400 text-[10px] font-bold rounded-full border border-green-500/20 uppercase tracking-wider">
+                  Wallet Connected
+                </span>
+              ) : null}
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 min-w-0 auto-rows-fr">
-              {useCases.map((item, idx) => (
-                <motion.div 
-                  key={item.title} 
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: idx * 0.1 }}
-                  className={`glass-card rounded-[40px] p-10 flex flex-col min-w-0 transition-all group relative overflow-hidden ${
-                    idx === 0
-                      ? 'md:col-span-2 border-brand-red/20 bg-[linear-gradient(180deg,rgba(139,0,0,0.12),rgba(12,12,12,0.96))]'
-                      : 'border-white/5 hover:border-brand-red/30'
-                  }`}
-                >
-                  {idx === 0 && (
-                    <div className="absolute top-0 right-0 w-44 h-44 bg-brand-red/10 blur-[80px] -mr-16 -mt-16 pointer-events-none" />
-                  )}
-                  <div className="relative flex h-full flex-col">
-                    <span className="text-[10px] uppercase tracking-[0.35em] font-black text-white/30 mb-6">
-                      Use Case {idx + 1}
+            <form onSubmit={submitWhitelist} className="space-y-5">
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <span className="text-[10px] text-white/40 uppercase tracking-[0.35em] font-black block">
+                    Connected Wallet
+                  </span>
+                  {isConnected && address ? (
+                    <button
+                      type="button"
+                      onClick={disconnectWallet}
+                      className="rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.25em] transition-all"
+                    >
+                      Disconnect
+                    </button>
+                  ) : null}
+
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-lg sm:text-2xl font-mono font-bold text-white">
+                      {isConnected && address ? shortenAddress(address) : 'No wallet connected'}
+                    </div>
+                    {isConnected && address ? (
+                      <div className="mt-2 text-xs text-white/40 font-mono break-all">
+                        {address}
+                      </div>
+                    ) : null}
+                  </div>
+                  {isConnected ? (
+                    <span className="shrink-0 px-3 py-1 bg-green-500/10 text-green-400 text-[10px] font-bold rounded-full border border-green-500/20 uppercase tracking-wider">
+                      Connected
                     </span>
-                    <h3 className="text-2xl xl:text-3xl font-display font-black mb-6 tracking-tight leading-[1.05] group-hover:text-brand-red-glow transition-colors">
-                      {item.title}
-                    </h3>
-                    <p className="text-white/60 text-lg leading-relaxed mt-auto">{item.text}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Roadmap Section */}
-        <section className="max-w-7xl mx-auto px-6 lg:px-8 mb-32">
-          <motion.div 
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="glass-card rounded-[56px] p-10 lg:p-16 border-white/10 relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-[50%] h-[50%] bg-brand-red/5 blur-[120px] rounded-full -mr-20 -mt-20" />
-            
-            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-10 mb-16 relative z-10">
-              <div>
-                <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.5em] font-black mb-6">Roadmap</p>
-                <h2 className="text-5xl lg:text-7xl font-display font-black tracking-tight">What SpeakerAI is building next</h2>
+                  ) : null}
+                </div>
               </div>
-              <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full border border-brand-red/30 bg-brand-red/15 text-sm font-black uppercase tracking-widest text-brand-red-glow red-glow">
-                <Rocket className="w-5 h-5 animate-bounce" />
-                Protocol Expansion
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                {isConnected ? (
+                  <button
+                    type="submit"
+                    disabled={
+                      submissionState === 'loading' ||
+                      hasSubmittedOnThisBrowser ||
+                      !address
+                    }
+                    className="px-6 py-4 bg-brand-red hover:bg-brand-red-glow text-white rounded-2xl text-sm font-black uppercase tracking-[0.28em] transition-all disabled:opacity-60"
+                  >
+                    {submissionState === 'loading' ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <LoaderCircle className="w-4 h-4 animate-spin" />
+                        Confirming
+                      </span>
+                    ) : hasSubmittedOnThisBrowser ? (
+                      'Whitelisted'
+                    ) : (
+                      'Confirm Wallet & Join'
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={connectWallet}
+                    className="px-6 py-4 bg-white text-black hover:bg-brand-red hover:text-white rounded-2xl text-sm font-black uppercase tracking-[0.28em] transition-all flex items-center justify-center gap-2"
+                  >
+                    Connect Wallet
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-              {roadmap.map((item, index) => (
-                <motion.div 
-                  key={item} 
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
-                  className="group rounded-[36px] border border-white/5 bg-white/5 p-8 flex items-start gap-6 hover:bg-white/10 hover:border-white/20 transition-all"
-                >
-                  <div className="w-14 h-14 shrink-0 rounded-[20px] bg-brand-red/10 border border-brand-red/20 flex items-center justify-center text-brand-red font-black text-2xl group-hover:bg-brand-red group-hover:text-white transition-all duration-500">
-                    {index + 1}
-                  </div>
-                  <p className="text-white/70 text-xl leading-relaxed pt-2">{item}</p>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        </section>
 
-        {/* Trust Pillars */}
-        <section className="max-w-7xl mx-auto px-6 lg:px-8 mb-32 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="glass-card rounded-[40px] p-10 border-white/5 hover:border-brand-red/30 transition-all group"
-          >
-            <ShieldCheck className="w-12 h-12 text-brand-red mb-8 group-hover:scale-110 transition-transform" />
-            <h3 className="text-3xl font-display font-black mb-6 tracking-tight">Transparent By Design</h3>
-            <p className="text-white/60 text-lg leading-relaxed">
-              Smart contracts, tokenomics, and reward mechanics are meant to be verifiable instead of opaque.
-            </p>
-          </motion.div>
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.1 }}
-            className="glass-card rounded-[40px] p-10 border-white/5 hover:border-brand-red/30 transition-all group"
-          >
-            <Network className="w-12 h-12 text-brand-red mb-8 group-hover:scale-110 transition-transform" />
-            <h3 className="text-3xl font-display font-black mb-6 tracking-tight">Built For Integration</h3>
-            <p className="text-white/60 text-lg leading-relaxed">
-              APIs and SDKs are part of the product vision, so builders can plug SpeakerAI intelligence into external apps and dApps.
-            </p>
-          </motion.div>
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.2 }}
-            className="glass-card rounded-[40px] p-10 border-white/5 hover:border-brand-red/30 transition-all group"
-          >
-            <AudioLines className="w-12 h-12 text-brand-red mb-8 group-hover:scale-110 transition-transform" />
-            <h3 className="text-3xl font-display font-black mb-6 tracking-tight">Ready For Real Audio Work</h3>
-            <p className="text-white/60 text-lg leading-relaxed">
-              The focus is practical audio utility: better conversations, better outputs, better tooling, and clearer ownership.
-            </p>
-          </motion.div>
-        </section>
-
-        {/* Final CTA */}
-        <section className="max-w-7xl mx-auto px-6 lg:px-8 mb-24">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            className="glass-card rounded-[64px] p-10 lg:p-24 border-brand-red/40 bg-[linear-gradient(135deg,rgba(139,0,0,0.2),rgba(10,10,10,0.98))] relative overflow-hidden text-center lg:text-left"
-          >
-            <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(139,0,0,0.3),transparent_60%)]" />
-            <div className="relative z-10 max-w-4xl">
-              <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.5em] font-black mb-8">Launch Into SpeakerAI</p>
-              <h2 className="text-5xl lg:text-8xl font-display font-black leading-[0.9] mb-10 tracking-tighter">
-                See what SpeakerAI does,
-                <span className="text-brand-red"> learn how the token works,</span>
-                and check your allocation.
-              </h2>
-              <p className="text-white/70 text-xl lg:text-2xl leading-relaxed mb-12 max-w-3xl">
-                If you want the full breakdown, start with the docs. If you just want to see what you may be eligible for, head straight to the allocation checker.
+              <p className="text-sm text-white/45">
+                You will be asked to sign a wallet message to confirm this address is yours before it gets whitelisted.
               </p>
-              <div className="flex flex-col sm:flex-row gap-6 justify-center lg:justify-start">
-                <Link
-                  href="/allocation"
-                  prefetch
-                  className="px-12 py-6 bg-brand-red hover:bg-brand-red-glow text-white rounded-full text-xl font-black transition-all red-glow-strong inline-flex items-center justify-center gap-4 group"
-                >
-                  CHECK YOUR ALLOCATION
-                  <ArrowRight className="w-7 h-7 group-hover:translate-x-1 transition-transform" />
-                </Link>
-                <Link
-                  href="/documentation"
-                  prefetch
-                  className="px-12 py-6 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xl font-black transition-all inline-flex items-center justify-center gap-4"
-                >
-                  VIEW DOCUMENTATION
-                </Link>
-              </div>
-            </div>
-          </motion.div>
-        </section>
+            </form>
 
-        {/* Footer */}
-        <footer className="max-w-7xl mx-auto px-6 lg:px-8 pt-20 border-t border-white/5">
+            {message ? (
+              <div
+                className={`mt-6 rounded-2xl border px-5 py-4 text-sm ${
+                  submissionState === 'success'
+                    ? 'border-green-500/20 bg-green-500/10 text-green-200'
+                    : 'border-red-500/20 bg-red-500/10 text-red-200'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 shrink-0" />
+                  <span>{message}</span>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        </div>
+
+        <footer className="max-w-7xl mx-auto px-6 lg:px-8 pt-20 border-t border-white/5 mt-20">
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-16 mb-20">
             <div>
               <div className="flex items-center gap-3 mb-8">
@@ -1002,7 +351,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-10">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-10">
               <div className="flex flex-col gap-4">
                 <span className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black mb-2">Protocol</span>
                 <Link href="/documentation" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Documentation</Link>
@@ -1016,26 +365,22 @@ export default function LandingPage() {
                 <Link href="/privacy-policy" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Privacy Policy</Link>
                 <Link href="/cookie-policy" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Cookie Policy</Link>
               </div>
-              <div className="flex flex-col gap-4">
-                <span className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black mb-2">Supply</span>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-display font-black text-brand-red-glow leading-none">{AIRDROP_POOL.toLocaleString()}</span>
-                    <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black tracking-[0.28em] text-white/45 uppercase leading-none">
-                      SPKR
-                    </span>
-                  </div>
-                  <span className="text-[9px] text-white/30 font-black tracking-widest mt-1">AIRDROP POOL</span>
+              <div className="flex flex-col gap-3">
+                <span className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black mb-2">Pool</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-3xl font-display font-black text-brand-red-glow tracking-tight">
+                    {TESTNET_AIRDROP_POOL.toLocaleString()}
+                  </span>
+                  <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black tracking-[0.28em] text-white/45 uppercase leading-none">
+                    SPKR
+                  </span>
                 </div>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-display font-black text-white leading-none">{TOTAL_SUPPLY.toLocaleString()}</span>
-                    <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black tracking-[0.28em] text-white/45 uppercase leading-none">
-                      SPKR
-                    </span>
-                  </div>
-                  <span className="text-[9px] text-white/30 font-black tracking-widest mt-1">TOTAL SUPPLY</span>
-                </div>
+                <span className="text-[10px] text-white/35 font-black tracking-[0.35em] uppercase">
+                  Testnet Airdrop Pool
+                </span>
+                <span className="text-xs text-white/35">
+                  From the Liquidity &amp; Ecosystem pool
+                </span>
               </div>
             </div>
           </div>
