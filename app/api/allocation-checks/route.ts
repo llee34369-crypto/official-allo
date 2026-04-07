@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 
 import { isSupabaseConfigured, upsertAllocationCheck } from '@/lib/supabase-admin';
+import {
+  isSameOriginRequest,
+  takeRateLimitToken,
+} from '@/lib/request-security';
 
 const walletAddressPattern = /^0x[a-fA-F0-9]{40}$/;
 
@@ -12,6 +16,24 @@ interface AllocationCheckPayload {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
+  }
+
+  const rateLimit = takeRateLimitToken(request, 'allocation-checks', 120);
+
+  if (!rateLimit.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rateLimit.retryAfterSeconds),
+        },
+      }
+    );
+  }
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json(
       {

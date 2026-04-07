@@ -207,7 +207,7 @@ export default function WhitelistPage() {
               JOIN THE <span className="text-brand-red">SPEAKERAI</span> TESTNET WHITELIST
             </h1>
             <p className="text-white/60 text-lg lg:text-xl max-w-2xl mx-auto">
-              Submit your wallet to get whitelisted in the coming SpeakerAI Testnet.
+              Submit your wallet to get whitelisted in SpeakerAI Testnet.
             </p>
           </motion.div>
         </section>

@@ -55,6 +55,14 @@ function formatErrorMessage(error: string | string[] | undefined) {
     return 'SPADMIN_PASSWORD is missing in your .env.';
   }
 
+  if (value === 'rate-limit') {
+    return 'Too many login attempts. Please wait a bit and try again.';
+  }
+
+  if (value === 'invalid-origin') {
+    return 'That login request came from an invalid origin.';
+  }
+
   return null;
 }
 

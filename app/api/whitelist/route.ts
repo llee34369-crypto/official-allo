@@ -7,6 +7,10 @@ import {
   isWhitelistSupabaseConfigured,
 } from '@/lib/whitelist-supabase';
 import { getWhitelistConfirmationMessage } from '@/lib/whitelist-message';
+import {
+  isSameOriginRequest,
+  takeRateLimitToken,
+} from '@/lib/request-security';
 
 interface WhitelistPayload {
   walletAddress?: unknown;
@@ -14,6 +18,24 @@ interface WhitelistPayload {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
+  }
+
+  const rateLimit = takeRateLimitToken(request, 'whitelist-submit', 20);
+
+  if (!rateLimit.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rateLimit.retryAfterSeconds),
+        },
+      }
+    );
+  }
+
   if (!isWhitelistSupabaseConfigured()) {
     return NextResponse.json(
       { error: 'Whitelist Supabase is not configured on the server.' },
