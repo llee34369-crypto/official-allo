@@ -28,6 +28,7 @@ const SOCIAL_LINKS = {
 } as const;
 
 const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+const normalizeAddress = (addr: string) => addr.trim().toLowerCase();
 
 function XLogo(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -76,6 +77,28 @@ export default function WhitelistPage() {
   const connectWallet = () => open({ view: 'Connect' });
   const disconnectWallet = () => disconnect();
   const hasSubmittedOnThisBrowser = Boolean(submittedWallet);
+  const normalizedConnectedWallet =
+    isConnected && address ? normalizeAddress(address) : null;
+  const normalizedSubmittedWallet = submittedWallet
+    ? normalizeAddress(submittedWallet)
+    : null;
+  const hasWalletSubmissionLock = Boolean(normalizedSubmittedWallet);
+  const isDifferentConnectedWallet =
+    Boolean(normalizedConnectedWallet && normalizedSubmittedWallet) &&
+    normalizedConnectedWallet !== normalizedSubmittedWallet;
+  const isSubmittedConnectedWallet =
+    Boolean(normalizedConnectedWallet && normalizedSubmittedWallet) &&
+    normalizedConnectedWallet === normalizedSubmittedWallet;
+  const canSubmitConnectedWallet =
+    Boolean(normalizedConnectedWallet) &&
+    (!hasWalletSubmissionLock || isSubmittedConnectedWallet);
+  const connectedWalletStatus = !normalizedConnectedWallet
+    ? 'disconnected'
+    : isDifferentConnectedWallet
+      ? 'different-wallet'
+      : isSubmittedConnectedWallet
+        ? 'submitted-wallet'
+        : 'fresh-wallet';
 
   useEffect(() => {
     const storedWallet = window.localStorage.getItem(WHITELIST_SUBMITTED_WALLET_KEY);
@@ -85,9 +108,30 @@ export default function WhitelistPage() {
     }
 
     setSubmittedWallet(storedWallet);
-    setSubmissionState('success');
-    setMessage(`This wallet address is already submitted ${storedWallet}.`);
   }, []);
+
+  useEffect(() => {
+    if (!submittedWallet) {
+      setSubmissionState('idle');
+      setMessage('');
+      return;
+    }
+
+    if (isDifferentConnectedWallet) {
+      setSubmissionState('error');
+      setMessage('Only can submit one wallet.');
+      return;
+    }
+
+    if (isSubmittedConnectedWallet) {
+      setSubmissionState('success');
+      setMessage(`This wallet address is already submitted ${submittedWallet}.`);
+      return;
+    }
+
+    setSubmissionState('idle');
+    setMessage('');
+  }, [isDifferentConnectedWallet, isSubmittedConnectedWallet, submittedWallet]);
 
   useEffect(() => {
     if (!message || submissionState === 'loading') {
@@ -105,8 +149,12 @@ export default function WhitelistPage() {
     event.preventDefault();
 
     if (submittedWallet) {
-      setSubmissionState('success');
-      setMessage(`This wallet address is already submitted ${submittedWallet}.`);
+      setSubmissionState(isDifferentConnectedWallet ? 'error' : 'success');
+      setMessage(
+        isDifferentConnectedWallet
+          ? 'Only can submit one wallet.'
+          : `This wallet address is already submitted ${submittedWallet}.`
+      );
       return;
     }
 
@@ -272,13 +320,12 @@ export default function WhitelistPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                {isConnected ? (
+                {connectedWalletStatus !== 'disconnected' ? (
                   <button
                     type="submit"
                     disabled={
                       submissionState === 'loading' ||
-                      hasSubmittedOnThisBrowser ||
-                      !address
+                      !canSubmitConnectedWallet
                     }
                     className="px-6 py-4 bg-brand-red hover:bg-brand-red-glow text-white rounded-2xl text-sm font-black uppercase tracking-[0.28em] transition-all disabled:opacity-60"
                   >
@@ -287,7 +334,9 @@ export default function WhitelistPage() {
                         <LoaderCircle className="w-4 h-4 animate-spin" />
                         Confirming
                       </span>
-                    ) : hasSubmittedOnThisBrowser ? (
+                    ) : connectedWalletStatus === 'different-wallet' ? (
+                      'Only can submit one wallet'
+                    ) : connectedWalletStatus === 'submitted-wallet' ? (
                       'Whitelisted'
                     ) : (
                       'Confirm Wallet & Join'
