@@ -77,9 +77,17 @@ export default function WhitelistPage() {
   const connectWallet = () => open({ view: 'Connect' });
   const disconnectWallet = () => disconnect();
   const hasSubmittedOnThisBrowser = Boolean(submittedWallet);
+  const normalizedConnectedWallet =
+    isConnected && address ? normalizeAddress(address) : null;
+  const normalizedSubmittedWallet = submittedWallet
+    ? normalizeAddress(submittedWallet)
+    : null;
   const isDifferentConnectedWallet =
-    Boolean(isConnected && address && submittedWallet) &&
-    normalizeAddress(address!) !== normalizeAddress(submittedWallet!);
+    Boolean(normalizedConnectedWallet && normalizedSubmittedWallet) &&
+    normalizedConnectedWallet !== normalizedSubmittedWallet;
+  const isSubmittedConnectedWallet =
+    Boolean(normalizedConnectedWallet && normalizedSubmittedWallet) &&
+    normalizedConnectedWallet === normalizedSubmittedWallet;
 
   useEffect(() => {
     const storedWallet = window.localStorage.getItem(WHITELIST_SUBMITTED_WALLET_KEY);
@@ -312,7 +320,7 @@ export default function WhitelistPage() {
                       </span>
                     ) : isDifferentConnectedWallet ? (
                       'Only can submit one wallet'
-                    ) : hasSubmittedOnThisBrowser ? (
+                    ) : hasSubmittedOnThisBrowser && isSubmittedConnectedWallet ? (
                       'Whitelisted'
                     ) : (
                       'Confirm Wallet & Join'
