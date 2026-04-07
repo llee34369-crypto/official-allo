@@ -92,6 +92,13 @@ export default function WhitelistPage() {
   const canSubmitConnectedWallet =
     Boolean(normalizedConnectedWallet) &&
     (!hasWalletSubmissionLock || isSubmittedConnectedWallet);
+  const connectedWalletStatus = !normalizedConnectedWallet
+    ? 'disconnected'
+    : isDifferentConnectedWallet
+      ? 'different-wallet'
+      : isSubmittedConnectedWallet
+        ? 'submitted-wallet'
+        : 'fresh-wallet';
 
   useEffect(() => {
     const storedWallet = window.localStorage.getItem(WHITELIST_SUBMITTED_WALLET_KEY);
@@ -313,7 +320,7 @@ export default function WhitelistPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                {isConnected ? (
+                {connectedWalletStatus !== 'disconnected' ? (
                   <button
                     type="submit"
                     disabled={
@@ -327,9 +334,9 @@ export default function WhitelistPage() {
                         <LoaderCircle className="w-4 h-4 animate-spin" />
                         Confirming
                       </span>
-                    ) : isDifferentConnectedWallet ? (
+                    ) : connectedWalletStatus === 'different-wallet' ? (
                       'Only can submit one wallet'
-                    ) : hasWalletSubmissionLock && isSubmittedConnectedWallet ? (
+                    ) : connectedWalletStatus === 'submitted-wallet' ? (
                       'Whitelisted'
                     ) : (
                       'Confirm Wallet & Join'
