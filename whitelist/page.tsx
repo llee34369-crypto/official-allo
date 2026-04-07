@@ -101,12 +101,12 @@ export default function WhitelistPage() {
     }
 
     setSubmittedWallet(storedWallet);
-    setSubmissionState('success');
-    setMessage(`This wallet address is already submitted ${storedWallet}.`);
   }, []);
 
   useEffect(() => {
     if (!submittedWallet) {
+      setSubmissionState('idle');
+      setMessage('');
       return;
     }
 
@@ -116,9 +116,15 @@ export default function WhitelistPage() {
       return;
     }
 
-    setSubmissionState('success');
-    setMessage(`This wallet address is already submitted ${submittedWallet}.`);
-  }, [address, isDifferentConnectedWallet, submittedWallet]);
+    if (isSubmittedConnectedWallet) {
+      setSubmissionState('success');
+      setMessage(`This wallet address is already submitted ${submittedWallet}.`);
+      return;
+    }
+
+    setSubmissionState('idle');
+    setMessage('');
+  }, [isDifferentConnectedWallet, isSubmittedConnectedWallet, submittedWallet]);
 
   useEffect(() => {
     if (!message || submissionState === 'loading') {
