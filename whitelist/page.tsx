@@ -82,12 +82,16 @@ export default function WhitelistPage() {
   const normalizedSubmittedWallet = submittedWallet
     ? normalizeAddress(submittedWallet)
     : null;
+  const hasWalletSubmissionLock = Boolean(normalizedSubmittedWallet);
   const isDifferentConnectedWallet =
     Boolean(normalizedConnectedWallet && normalizedSubmittedWallet) &&
     normalizedConnectedWallet !== normalizedSubmittedWallet;
   const isSubmittedConnectedWallet =
     Boolean(normalizedConnectedWallet && normalizedSubmittedWallet) &&
     normalizedConnectedWallet === normalizedSubmittedWallet;
+  const canSubmitConnectedWallet =
+    Boolean(normalizedConnectedWallet) &&
+    (!hasWalletSubmissionLock || isSubmittedConnectedWallet);
 
   useEffect(() => {
     const storedWallet = window.localStorage.getItem(WHITELIST_SUBMITTED_WALLET_KEY);
@@ -308,8 +312,7 @@ export default function WhitelistPage() {
                     type="submit"
                     disabled={
                       submissionState === 'loading' ||
-                      hasSubmittedOnThisBrowser ||
-                      !address
+                      !canSubmitConnectedWallet
                     }
                     className="px-6 py-4 bg-brand-red hover:bg-brand-red-glow text-white rounded-2xl text-sm font-black uppercase tracking-[0.28em] transition-all disabled:opacity-60"
                   >
@@ -320,7 +323,7 @@ export default function WhitelistPage() {
                       </span>
                     ) : isDifferentConnectedWallet ? (
                       'Only can submit one wallet'
-                    ) : hasSubmittedOnThisBrowser && isSubmittedConnectedWallet ? (
+                    ) : hasWalletSubmissionLock && isSubmittedConnectedWallet ? (
                       'Whitelisted'
                     ) : (
                       'Confirm Wallet & Join'
