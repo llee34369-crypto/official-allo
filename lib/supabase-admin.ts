@@ -7,13 +7,6 @@ export interface AllocationCheckRecord {
   allocation: number;
 }
 
-interface AllocationCheckRow {
-  wallet_address: string;
-  tx_count: number | string;
-  is_eligible: boolean;
-  allocation: number | string;
-}
-
 export interface SpadminStats {
   totalWallets: number;
   totalSpkrChecked: number;
@@ -92,32 +85,6 @@ export async function upsertAllocationCheck(check: AllocationCheckRecord) {
       },
     ]),
   });
-}
-
-export async function findAllocationCheck(walletAddress: string) {
-  const normalizedWalletAddress = walletAddress.toLowerCase();
-  const response = await supabaseAdminFetch(
-    `/rest/v1/allocation_checks?select=wallet_address,tx_count,is_eligible,allocation&wallet_address=eq.${encodeURIComponent(
-      normalizedWalletAddress
-    )}&limit=1`,
-    {
-      method: 'GET',
-    }
-  );
-
-  const rows = (await response.json()) as AllocationCheckRow[];
-  const row = rows[0];
-
-  if (!row) {
-    return null;
-  }
-
-  return {
-    walletAddress: row.wallet_address,
-    txCount: Number(row.tx_count ?? 0),
-    isEligible: Boolean(row.is_eligible),
-    allocation: Number(row.allocation ?? 0),
-  } satisfies AllocationCheckRecord;
 }
 
 export async function getSpadminStats(): Promise<SpadminStats> {
