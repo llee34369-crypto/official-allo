@@ -5,14 +5,20 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAccount, useAccountEffect, useChainId, useDisconnect } from 'wagmi';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
-import { createPublicClient, http, isAddress } from 'viem';
-import { bsc } from 'viem/chains';
+import { isAddress } from 'viem';
 import {
   AirdropData,
   getInitialAirdropState,
   normalizeAddress,
   useAllocationState,
 } from '@/components/AllocationStateProvider';
+import {
+  AIRDROP_POOL,
+  BSC_CHAIN_ID,
+  MIN_TX_ELIGIBLE,
+  SNAPSHOT_LABEL,
+  TOTAL_SUPPLY,
+} from '@/lib/allocation-settings';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -27,14 +33,6 @@ import {
   Zap,
 } from 'lucide-react';
 
-const BSC_CHAIN_ID = 56;
-const TOTAL_SUPPLY = 100000000;
-const AIRDROP_POOL = 15000000;
-const MIN_TX_ELIGIBLE = 10;
-const MAX_TX_FOR_CAP = 10000;
-const MAX_USER_CAP = 50000;
-const SNAPSHOT_TIMESTAMP = BigInt(Math.floor(Date.UTC(2026, 2, 1, 0, 0, 0) / 1000));
-const SNAPSHOT_LABEL = 'Before March 1, 2026';
 const ALLOCATION_STORAGE_KEY = 'speakerai-allocation';
 
 const SOCIAL_LINKS = {
@@ -58,13 +56,6 @@ function DiscordLogo(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-
-const publicClient = createPublicClient({
-  chain: bsc,
-  transport: http(),
-});
-
-let snapshotBlockPromise: Promise<bigint> | null = null;
 
 const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
@@ -139,58 +130,6 @@ const persistAirdrop = (walletAddress: string, airdrop: Omit<AirdropData, 'loadi
   window.localStorage.setItem(ALLOCATION_STORAGE_KEY, JSON.stringify(payload));
 };
 
-const saveAllocationCheck = async (walletAddress: string, airdrop: AllocationSnapshot) => {
-  try {
-    const response = await fetch('/api/allocation-checks', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        address: walletAddress,
-        txCount: airdrop.txCount,
-        isEligible: airdrop.isEligible,
-        allocation: airdrop.allocation,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
-    }
-  } catch (error) {
-    console.error('Unable to sync allocation check to Supabase:', error);
-  }
-};
-
-const getSnapshotBlockNumber = async () => {
-  if (snapshotBlockPromise) {
-    return snapshotBlockPromise;
-  }
-
-  snapshotBlockPromise = (async () => {
-    const latestBlock = await publicClient.getBlock();
-    let low = BigInt(0);
-    let high = latestBlock.number;
-    let best = BigInt(0);
-
-    while (low <= high) {
-      const mid = (low + high) / BigInt(2);
-      const block = await publicClient.getBlock({ blockNumber: mid });
-
-      if (block.timestamp <= SNAPSHOT_TIMESTAMP) {
-        best = mid;
-        low = mid + BigInt(1);
-      } else {
-        high = mid - BigInt(1);
-      }
-    }
-
-    return best;
-  })();
-
-  return snapshotBlockPromise;
-};
-
 export default function SpeakerAIDashboard() {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
@@ -252,19 +191,35 @@ export default function SpeakerAIDashboard() {
     });
 
     try {
-      const snapshotBlockNumber = await getSnapshotBlockNumber();
-      const [countBigInt] = await Promise.all([
-        publicClient.getTransactionCount({
-          address: walletAddress as `0x${string}`,
-          blockNumber: snapshotBlockNumber,
+      const response = await fetch('/api/allocation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          address: walletAddress,
         }),
-        new Promise(resolve => window.setTimeout(resolve, 5000)),
-      ]);
+      });
 
-      const txCount = Number(countBigInt);
-      const isEligible = txCount >= MIN_TX_ELIGIBLE;
-      const normalizedScore = Math.min(txCount / MAX_TX_FOR_CAP, 1);
-      const allocation = isEligible ? Math.floor(normalizedScore * MAX_USER_CAP) : 0;
+      const result = (await response.json()) as
+        | {
+            error?: string;
+            txCount?: number;
+            isEligible?: boolean;
+            allocation?: number;
+          }
+        | undefined;
+
+      if (!response.ok) {
+        throw new Error(
+          result?.error || 'Unable to calculate your snapshot allocation right now.'
+        );
+      }
+
+      const txCount = typeof result?.txCount === 'number' ? result.txCount : 0;
+      const isEligible = result?.isEligible === true;
+      const allocation =
+        typeof result?.allocation === 'number' ? result.allocation : 0;
 
       if (calculationRequestRef.current !== requestId) {
         return;
@@ -280,7 +235,6 @@ export default function SpeakerAIDashboard() {
 
       persistAirdrop(walletAddress, nextAirdrop);
       storeAirdrop(walletAddress, nextAirdrop);
-      void saveAllocationCheck(walletAddress, nextAirdrop);
     } catch (error) {
       if (calculationRequestRef.current !== requestId) {
         return;
@@ -312,7 +266,6 @@ export default function SpeakerAIDashboard() {
 
     if (persistedAirdrop) {
       storeAirdrop(selectedAddress, persistedAirdrop);
-      void saveAllocationCheck(selectedAddress, persistedAirdrop);
       return;
     }
 
