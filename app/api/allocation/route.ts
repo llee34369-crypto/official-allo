@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { isAddress } from 'viem';
+import { createPublicClient, http, isAddress } from 'viem';
+import { bsc } from 'viem/chains';
 
 import {
   calculateAllocationFromTxCount,
@@ -26,11 +27,17 @@ interface BscScanResponse<T> {
 }
 
 const BSCSCAN_API_URL = 'https://api.bscscan.com/api';
+const publicClient = createPublicClient({
+  chain: bsc,
+  transport: http(),
+});
 
 let snapshotBlockPromise: Promise<number> | null = null;
 
 function getBscScanApiKey() {
-  const apiKey = process.env.BSCSCAN_API_KEY?.trim();
+  const apiKey =
+    process.env.BSCSCAN_API_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_BSCSCAN_API_KEY?.trim();
 
   if (!apiKey) {
     throw new Error('Missing BSCSCAN_API_KEY in the environment.');
@@ -56,6 +63,14 @@ async function callBscScan<T>(params: Record<string, string>) {
 
   const payload = (await response.json()) as BscScanResponse<T>;
 
+  if (payload.status === '0') {
+    throw new Error(
+      typeof payload.result === 'string'
+        ? payload.result
+        : payload.message || 'BscScan returned a NOTOK response.'
+    );
+  }
+
   if (
     typeof payload.result === 'string' &&
     payload.result.toLowerCase().includes('error')
@@ -70,26 +85,53 @@ async function callBscScan<T>(params: Record<string, string>) {
   return payload.result;
 }
 
+async function getSnapshotBlockNumberFromRpc() {
+  const latestBlock = await publicClient.getBlock();
+  let low = BigInt(0);
+  let high = latestBlock.number;
+  let best = BigInt(0);
+  const targetTimestamp = BigInt(SNAPSHOT_TIMESTAMP);
+
+  while (low <= high) {
+    const mid = (low + high) / BigInt(2);
+    const block = await publicClient.getBlock({ blockNumber: mid });
+
+    if (block.timestamp <= targetTimestamp) {
+      best = mid;
+      low = mid + BigInt(1);
+    } else {
+      high = mid - BigInt(1);
+    }
+  }
+
+  return Number(best);
+}
+
 async function getSnapshotBlockNumber() {
   if (snapshotBlockPromise) {
     return snapshotBlockPromise;
   }
 
   snapshotBlockPromise = (async () => {
-    const result = await callBscScan<string>({
-      module: 'block',
-      action: 'getblocknobytime',
-      timestamp: String(SNAPSHOT_TIMESTAMP),
-      closest: 'before',
-    });
+    try {
+      const result = await callBscScan<string>({
+        module: 'block',
+        action: 'getblocknobytime',
+        timestamp: String(SNAPSHOT_TIMESTAMP),
+        closest: 'before',
+      });
 
-    const parsedValue = Number(result);
+      const parsedValue = Number(result);
 
-    if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
-      throw new Error('Unable to resolve snapshot block number from BscScan.');
+      if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+        throw new Error('Unable to resolve snapshot block number from BscScan.');
+      }
+
+      return parsedValue;
+    } catch (error) {
+      console.error('BscScan snapshot lookup failed, falling back to RPC:', error);
+      return getSnapshotBlockNumberFromRpc();
     }
-
-    return parsedValue;
   })();
 
   try {
@@ -101,20 +143,30 @@ async function getSnapshotBlockNumber() {
 }
 
 async function getTransactionCountAtBlock(walletAddress: string, blockNumber: number) {
-  const result = await callBscScan<string>({
-    module: 'proxy',
-    action: 'eth_getTransactionCount',
-    address: walletAddress,
-    tag: `0x${blockNumber.toString(16)}`,
-  });
+  try {
+    const result = await callBscScan<string>({
+      module: 'proxy',
+      action: 'eth_getTransactionCount',
+      address: walletAddress,
+      tag: `0x${blockNumber.toString(16)}`,
+    });
 
-  const parsedValue = Number(BigInt(result));
+    const parsedValue = Number(BigInt(result));
 
-  if (!Number.isFinite(parsedValue) || parsedValue < 0) {
-    throw new Error('Unable to parse transaction count from BscScan.');
+    if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+      throw new Error('Unable to parse transaction count from BscScan.');
+    }
+
+    return parsedValue;
+  } catch (error) {
+    console.error('BscScan transaction count lookup failed, falling back to RPC:', error);
+    const countBigInt = await publicClient.getTransactionCount({
+      address: walletAddress as `0x${string}`,
+      blockNumber: BigInt(blockNumber),
+    });
+
+    return Number(countBigInt);
   }
-
-  return parsedValue;
 }
 
 export async function POST(request: Request) {
