@@ -411,45 +411,24 @@ export default function SpeakerAIDashboard() {
       return;
     }
 
-    let verifyingTimeoutId: number | null = null;
+    const openingTimeoutId = window.setTimeout(() => {
+      setActiveTaskPhase('verifying');
+    }, 900);
 
-    const beginVerification = () => {
-      setActiveTaskPhase((currentPhase) => {
-        if (currentPhase !== 'opening') {
-          return currentPhase;
-        }
-
-        verifyingTimeoutId = window.setTimeout(() => {
-          if (activeTaskLoading === 'follow') {
-            setFollowTaskDone(true);
-          } else {
-            setRepostTaskDone(true);
-          }
-
-          setActiveTaskLoading(null);
-          setActiveTaskPhase(null);
-        }, 4000);
-
-        return 'verifying';
-      });
-    };
-
-    const handleFocus = () => {
-      if (document.visibilityState === 'visible') {
-        beginVerification();
+    const completeTimeoutId = window.setTimeout(() => {
+      if (activeTaskLoading === 'follow') {
+        setFollowTaskDone(true);
+      } else {
+        setRepostTaskDone(true);
       }
-    };
 
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleFocus);
+      setActiveTaskLoading(null);
+      setActiveTaskPhase(null);
+    }, 2400);
 
     return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleFocus);
-
-      if (verifyingTimeoutId) {
-        window.clearTimeout(verifyingTimeoutId);
-      }
+      window.clearTimeout(openingTimeoutId);
+      window.clearTimeout(completeTimeoutId);
     };
   }, [activeTaskLoading, activeTaskPhase]);
 
