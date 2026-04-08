@@ -92,6 +92,8 @@ interface AllocationSnapshot {
   allocation: number;
 }
 
+type TaskStatus = 'idle' | 'opening' | 'verifying' | 'done';
+
 const loadPersistedAirdrop = (walletAddress: string): AirdropData | null => {
   if (typeof window === 'undefined') {
     return null;
@@ -257,8 +259,10 @@ export default function SpeakerAIDashboard() {
   const [taskGateReady, setTaskGateReady] = useState(false);
   const [followTaskDone, setFollowTaskDone] = useState(false);
   const [repostTaskDone, setRepostTaskDone] = useState(false);
-  const [activeTaskLoading, setActiveTaskLoading] = useState<'follow' | 'repost' | null>(null);
-  const [activeTaskPhase, setActiveTaskPhase] = useState<'opening' | 'verifying' | null>(null);
+  const [followTaskStatus, setFollowTaskStatus] = useState<TaskStatus>('idle');
+  const [repostTaskStatus, setRepostTaskStatus] = useState<TaskStatus>('idle');
+  const followTaskTimersRef = useRef<number[]>([]);
+  const repostTaskTimersRef = useRef<number[]>([]);
   const calculationRequestRef = useRef(0);
   const selectedAddress = pastedAddress ?? address ?? null;
   const isUsingPastedAddress = Boolean(pastedAddress);
@@ -311,10 +315,47 @@ export default function SpeakerAIDashboard() {
     setCopySuccess(false);
   };
 
+  const clearTaskTimers = (task: 'follow' | 'repost') => {
+    const timerRef =
+      task === 'follow' ? followTaskTimersRef : repostTaskTimersRef;
+
+    timerRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    timerRef.current = [];
+  };
+
   const openTaskLink = (url: string, task: 'follow' | 'repost') => {
-    setActiveTaskLoading(task);
-    setActiveTaskPhase('opening');
+    clearTaskTimers(task);
+
+    if (task === 'follow') {
+      setFollowTaskStatus('opening');
+    } else {
+      setRepostTaskStatus('opening');
+    }
+
     window.open(url, '_blank', 'noopener,noreferrer');
+
+    const timerRef =
+      task === 'follow' ? followTaskTimersRef : repostTaskTimersRef;
+
+    const openingTimeoutId = window.setTimeout(() => {
+      if (task === 'follow') {
+        setFollowTaskStatus('verifying');
+      } else {
+        setRepostTaskStatus('verifying');
+      }
+    }, 600);
+
+    const completeTimeoutId = window.setTimeout(() => {
+      if (task === 'follow') {
+        setFollowTaskDone(true);
+        setFollowTaskStatus('done');
+      } else {
+        setRepostTaskDone(true);
+        setRepostTaskStatus('done');
+      }
+    }, 1800);
+
+    timerRef.current = [openingTimeoutId, completeTimeoutId];
   };
 
   const unlockAllocation = () => {
@@ -391,6 +432,8 @@ export default function SpeakerAIDashboard() {
       setFollowTaskDone(false);
       setRepostTaskDone(false);
       setTaskGateReady(false);
+      setFollowTaskStatus('idle');
+      setRepostTaskStatus('idle');
       return;
     }
 
@@ -398,39 +441,24 @@ export default function SpeakerAIDashboard() {
       setFollowTaskDone(true);
       setRepostTaskDone(true);
       setTaskGateReady(true);
+      setFollowTaskStatus('done');
+      setRepostTaskStatus('done');
       return;
     }
 
     setFollowTaskDone(false);
     setRepostTaskDone(false);
     setTaskGateReady(false);
+    setFollowTaskStatus('idle');
+    setRepostTaskStatus('idle');
   }, [selectedAddress, taskUnlocked]);
 
   useEffect(() => {
-    if (!activeTaskLoading || activeTaskPhase !== 'opening') {
-      return;
-    }
-
-    const openingTimeoutId = window.setTimeout(() => {
-      setActiveTaskPhase('verifying');
-    }, 900);
-
-    const completeTimeoutId = window.setTimeout(() => {
-      if (activeTaskLoading === 'follow') {
-        setFollowTaskDone(true);
-      } else {
-        setRepostTaskDone(true);
-      }
-
-      setActiveTaskLoading(null);
-      setActiveTaskPhase(null);
-    }, 2400);
-
     return () => {
-      window.clearTimeout(openingTimeoutId);
-      window.clearTimeout(completeTimeoutId);
+      clearTaskTimers('follow');
+      clearTaskTimers('repost');
     };
-  }, [activeTaskLoading, activeTaskPhase]);
+  }, []);
 
   useEffect(() => {
     if (!selectedAddress) {
@@ -651,14 +679,16 @@ export default function SpeakerAIDashboard() {
                       <button
                         type="button"
                         onClick={() => openTaskLink(X_FOLLOW_URL, 'follow')}
-                        disabled={activeTaskLoading === 'follow'}
+                        disabled={followTaskStatus === 'opening' || followTaskStatus === 'verifying' || followTaskStatus === 'done'}
                         className="w-full rounded-2xl bg-white text-black hover:bg-brand-red hover:text-white px-5 py-4 text-sm font-black uppercase tracking-[0.25em] transition-all flex items-center justify-center gap-3"
                       >
-                        {activeTaskLoading === 'follow' ? (
+                        {followTaskStatus === 'opening' || followTaskStatus === 'verifying' ? (
                           <>
                             <LoaderCircle className="w-4 h-4 animate-spin" />
-                            {activeTaskPhase === 'verifying' ? 'Verifying now' : 'Opening X'}
+                            {followTaskStatus === 'verifying' ? 'Verifying now' : 'Opening X'}
                           </>
+                        ) : followTaskStatus === 'done' ? (
+                          'Task Completed'
                         ) : (
                           <>
                             Follow on X
@@ -692,14 +722,16 @@ export default function SpeakerAIDashboard() {
                       <button
                         type="button"
                         onClick={() => openTaskLink(X_REPOST_URL, 'repost')}
-                        disabled={activeTaskLoading === 'repost'}
+                        disabled={repostTaskStatus === 'opening' || repostTaskStatus === 'verifying' || repostTaskStatus === 'done'}
                         className="w-full rounded-2xl bg-white/5 border border-white/10 hover:bg-brand-red hover:border-brand-red hover:text-white px-5 py-4 text-sm font-black uppercase tracking-[0.25em] transition-all flex items-center justify-center gap-3"
                       >
-                        {activeTaskLoading === 'repost' ? (
+                        {repostTaskStatus === 'opening' || repostTaskStatus === 'verifying' ? (
                           <>
                             <LoaderCircle className="w-4 h-4 animate-spin" />
-                            {activeTaskPhase === 'verifying' ? 'Verifying now' : 'Opening X'}
+                            {repostTaskStatus === 'verifying' ? 'Verifying now' : 'Opening X'}
                           </>
+                        ) : repostTaskStatus === 'done' ? (
+                          'Task Completed'
                         ) : (
                           <>
                             Repost on X
