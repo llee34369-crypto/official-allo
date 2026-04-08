@@ -558,12 +558,12 @@ export default function LandingPage() {
       </div>
 
       <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/5 bg-black/60 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-brand-red rounded-xl flex items-center justify-center red-glow-strong">
-              <Zap className="text-white w-6 h-6 fill-current" />
+            <div className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-red rounded-xl flex items-center justify-center red-glow-strong">
+              <Zap className="text-white w-5 h-5 sm:w-6 sm:h-6 fill-current" />
             </div>
-            <span className="text-2xl font-display font-black tracking-tighter uppercase">
+            <span className="text-xl sm:text-2xl font-display font-black tracking-tighter uppercase">
               SPEAKER<span className="text-brand-red">AI</span>
             </span>
           </div>
@@ -593,27 +593,27 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      <main className="relative z-10 pt-32 pb-24">
+      <main className="relative z-10 pt-28 sm:pt-32 pb-24">
         {/* Hero Section */}
-        <section className="max-w-7xl mx-auto px-6 lg:px-8 mb-32">
-          <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-16 items-center">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-24 sm:mb-32">
+          <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-10 sm:gap-16 items-center">
             <motion.div 
               initial={{ opacity: 0, x: -30 }} 
               animate={{ opacity: 1, x: 0 }} 
               transition={{ duration: 0.8, ease: "easeOut" }}
             >
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-brand-red/30 bg-brand-red/10 text-[11px] font-black uppercase tracking-[0.4em] text-brand-red-glow mb-8">
+              <div className="inline-flex max-w-full items-center gap-2 px-3 sm:px-4 py-2 rounded-full border border-brand-red/30 bg-brand-red/10 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-brand-red-glow mb-6 sm:mb-8">
                 <Sparkles className="w-4 h-4 animate-pulse" />
                 SpeakerAI Protocol
               </div>
-              <h1 className="text-6xl sm:text-7xl lg:text-[100px] font-display font-black tracking-tight leading-[0.85] mb-8">
+              <h1 className="text-[clamp(3.15rem,14vw,5rem)] sm:text-7xl lg:text-[100px] font-display font-black tracking-tight leading-[0.88] sm:leading-[0.85] mb-6 sm:mb-8 break-words">
                 VOICE AS
                 <br />
                 <span className="text-brand-red text-glow">INFRASTRUCTURE</span>
                 <br />
                 FOR WEB3.
               </h1>
-              <p className="text-white/60 text-xl lg:text-2xl max-w-2xl leading-relaxed mb-12">
+              <p className="text-white/60 text-lg sm:text-xl lg:text-2xl max-w-2xl leading-relaxed mb-8 sm:mb-12">
                 SpeakerAI is building a decentralized voice and audio protocol where AI processing,
                 conversational intelligence, and on-chain incentives work as one product layer.
               </p>
@@ -766,25 +766,31 @@ export default function LandingPage() {
         </section>
 
         {/* Tokenomics Section */}
-        <section id="tokenomics" className="max-w-7xl mx-auto px-6 lg:px-8 mb-32 scroll-mt-32">
+        <section id="tokenomics" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-32 scroll-mt-32">
           <motion.div 
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="glass-card rounded-[60px] p-10 lg:p-20 border-white/10 bg-[linear-gradient(165deg,rgba(15,15,15,0.8),rgba(5,5,5,0.98))]"
+            className="glass-card rounded-[36px] sm:rounded-[48px] lg:rounded-[60px] p-6 sm:p-8 lg:p-20 border-white/10 bg-[linear-gradient(165deg,rgba(15,15,15,0.8),rgba(5,5,5,0.98))]"
           >
-            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-10 mb-20">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 sm:gap-10 mb-12 sm:mb-16 lg:mb-20">
               <div className="max-w-3xl">
                 <p className="text-[11px] text-brand-red-glow uppercase tracking-[0.5em] font-black mb-6">Tokenomics</p>
-                <h2 className="text-5xl lg:text-7xl font-display font-black mb-8 tracking-tight leading-[1.05]">SPKR is designed to fund adoption, reward users, and scale the protocol.</h2>
-                <p className="text-white/60 text-xl leading-relaxed">
+                <h2 className="text-4xl sm:text-5xl lg:text-7xl font-display font-black mb-6 sm:mb-8 tracking-tight leading-[0.98] sm:leading-[1.05]">
+                  SPKR is designed to fund adoption, reward users, and scale the protocol.
+                </h2>
+                <p className="text-white/60 text-base sm:text-lg lg:text-xl leading-relaxed">
                   Hover the chart to explore each allocation.
                 </p>
               </div>
-              <div className="rounded-[32px] border border-brand-red/30 bg-brand-red/10 px-10 py-8 red-glow">
-                <p className="text-[11px] text-white/40 uppercase tracking-[0.4em] font-black mb-3">Total Supply</p>
-                <p className="text-5xl font-display font-black text-brand-red-glow tracking-tighter">{TOTAL_SUPPLY.toLocaleString()} </p>
-                <p className="text-xs text-white/30 font-black tracking-widest mt-1">SPKR TOKENS</p>
+              <div className="flex w-full justify-center lg:justify-end">
+                <div className="w-full max-w-[380px] sm:max-w-full sm:w-auto lg:min-w-[380px] rounded-[28px] sm:rounded-[32px] border border-brand-red/30 bg-brand-red/10 px-5 sm:px-8 lg:px-10 py-5 sm:py-7 lg:py-8 red-glow overflow-hidden shrink-0">
+                  <p className="text-[11px] text-white/40 uppercase tracking-[0.4em] font-black mb-3">Total Supply</p>
+                  <p className="max-w-full text-[clamp(2rem,9vw,3rem)] sm:text-5xl lg:text-5xl font-display font-black text-brand-red-glow tracking-tighter leading-none whitespace-nowrap">
+                    {TOTAL_SUPPLY.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-white/30 font-black tracking-widest mt-1">SPKR TOKENS</p>
+                </div>
               </div>
             </div>
 
