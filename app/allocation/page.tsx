@@ -36,6 +36,11 @@ const MAX_USER_CAP = 50000;
 const SNAPSHOT_TIMESTAMP = BigInt(Math.floor(Date.UTC(2026, 2, 1, 0, 0, 0) / 1000));
 const SNAPSHOT_LABEL = 'Before March 1, 2026';
 const ALLOCATION_STORAGE_KEY = 'speakerai-allocation';
+const ALLOCATION_TASK_STORAGE_KEY = 'speakerai-allocation-task-unlock';
+const X_HANDLE = 'SpeakerAI_BNB';
+const X_FOLLOW_URL = `https://x.com/intent/follow?screen_name=${X_HANDLE}`;
+const X_REPOST_URL =
+  'https://x.com/SpeakerAI_BNB/status/2041803442121748936?s=20';
 
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
@@ -74,6 +79,11 @@ interface PersistedAirdropData {
   txCount: number;
   isEligible: boolean;
   allocation: number;
+}
+
+interface PersistedTaskUnlockStatus {
+  version: 1;
+  unlocked: boolean;
 }
 
 interface AllocationSnapshot {
@@ -121,6 +131,47 @@ const loadPersistedAirdrop = (walletAddress: string): AirdropData | null => {
     console.error('Unable to restore saved allocation state:', error);
     return null;
   }
+};
+
+const loadTaskUnlockStatus = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(ALLOCATION_TASK_STORAGE_KEY);
+
+    if (!rawValue) {
+      return false;
+    }
+
+    const parsedValue = JSON.parse(rawValue) as Partial<PersistedTaskUnlockStatus>;
+
+    if (
+      parsedValue.version !== 1 ||
+      typeof parsedValue.unlocked !== 'boolean'
+    ) {
+      return false;
+    }
+
+    return parsedValue.unlocked;
+  } catch (error) {
+    console.error('Unable to restore allocation task unlock status:', error);
+    return false;
+  }
+};
+
+const persistTaskUnlockStatus = (unlocked: boolean) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const payload: PersistedTaskUnlockStatus = {
+    version: 1,
+    unlocked,
+  };
+
+  window.localStorage.setItem(ALLOCATION_TASK_STORAGE_KEY, JSON.stringify(payload));
 };
 
 const persistAirdrop = (walletAddress: string, airdrop: Omit<AirdropData, 'loading' | 'error'>) => {
@@ -202,12 +253,31 @@ export default function SpeakerAIDashboard() {
   const [pastedAddressInput, setPastedAddressInput] = useState('');
   const [pastedAddress, setPastedAddress] = useState<string | null>(null);
   const [addressInputError, setAddressInputError] = useState<string | null>(null);
+  const [taskUnlocked, setTaskUnlocked] = useState(false);
+  const [taskGateReady, setTaskGateReady] = useState(false);
+  const [followTaskDone, setFollowTaskDone] = useState(false);
+  const [repostTaskDone, setRepostTaskDone] = useState(false);
+  const [activeTaskLoading, setActiveTaskLoading] = useState<'follow' | 'repost' | null>(null);
+  const [activeTaskPhase, setActiveTaskPhase] = useState<'opening' | 'verifying' | null>(null);
   const calculationRequestRef = useRef(0);
   const selectedAddress = pastedAddress ?? address ?? null;
   const isUsingPastedAddress = Boolean(pastedAddress);
   const airdrop = selectedAddress
     ? (airdrops[normalizeAddress(selectedAddress)] ?? getInitialAirdropState())
     : getInitialAirdropState();
+  const shouldShowTaskGate =
+    Boolean(selectedAddress) &&
+    !taskUnlocked &&
+    taskGateReady &&
+    !airdrop.loading &&
+    !airdrop.error;
+  const visibleAirdrop =
+    Boolean(selectedAddress) &&
+    !taskUnlocked &&
+    !taskGateReady &&
+    !airdrop.error
+      ? { ...airdrop, loading: true, error: null }
+      : airdrop;
 
   const connectWallet = () => open({ view: 'Connect' });
   const disconnectWallet = () => disconnect();
@@ -239,6 +309,21 @@ export default function SpeakerAIDashboard() {
     setPastedAddressInput('');
     setAddressInputError(null);
     setCopySuccess(false);
+  };
+
+  const openTaskLink = (url: string, task: 'follow' | 'repost') => {
+    setActiveTaskLoading(task);
+    setActiveTaskPhase('opening');
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const unlockAllocation = () => {
+    if (!followTaskDone || !repostTaskDone) {
+      return;
+    }
+
+    setTaskUnlocked(true);
+    persistTaskUnlockStatus(true);
   };
 
   const calculateAllocation = async (walletAddress: string) => {
@@ -281,6 +366,7 @@ export default function SpeakerAIDashboard() {
       persistAirdrop(walletAddress, nextAirdrop);
       storeAirdrop(walletAddress, nextAirdrop);
       void saveAllocationCheck(walletAddress, nextAirdrop);
+      setTaskGateReady(true);
     } catch (error) {
       if (calculationRequestRef.current !== requestId) {
         return;
@@ -297,6 +383,77 @@ export default function SpeakerAIDashboard() {
   };
 
   useEffect(() => {
+    setTaskUnlocked(loadTaskUnlockStatus());
+  }, []);
+
+  useEffect(() => {
+    if (!selectedAddress) {
+      setFollowTaskDone(false);
+      setRepostTaskDone(false);
+      setTaskGateReady(false);
+      return;
+    }
+
+    if (taskUnlocked) {
+      setFollowTaskDone(true);
+      setRepostTaskDone(true);
+      setTaskGateReady(true);
+      return;
+    }
+
+    setFollowTaskDone(false);
+    setRepostTaskDone(false);
+    setTaskGateReady(false);
+  }, [selectedAddress, taskUnlocked]);
+
+  useEffect(() => {
+    if (!activeTaskLoading || activeTaskPhase !== 'opening') {
+      return;
+    }
+
+    let verifyingTimeoutId: number | null = null;
+
+    const beginVerification = () => {
+      setActiveTaskPhase((currentPhase) => {
+        if (currentPhase !== 'opening') {
+          return currentPhase;
+        }
+
+        verifyingTimeoutId = window.setTimeout(() => {
+          if (activeTaskLoading === 'follow') {
+            setFollowTaskDone(true);
+          } else {
+            setRepostTaskDone(true);
+          }
+
+          setActiveTaskLoading(null);
+          setActiveTaskPhase(null);
+        }, 4000);
+
+        return 'verifying';
+      });
+    };
+
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        beginVerification();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+
+      if (verifyingTimeoutId) {
+        window.clearTimeout(verifyingTimeoutId);
+      }
+    };
+  }, [activeTaskLoading, activeTaskPhase]);
+
+  useEffect(() => {
     if (!selectedAddress) {
       return;
     }
@@ -305,6 +462,9 @@ export default function SpeakerAIDashboard() {
     const cachedAirdrop = airdrops[normalizeAddress(selectedAddress)];
 
     if (cachedAirdrop) {
+      if (!cachedAirdrop.loading) {
+        setTaskGateReady(true);
+      }
       return;
     }
 
@@ -313,11 +473,12 @@ export default function SpeakerAIDashboard() {
     if (persistedAirdrop) {
       storeAirdrop(selectedAddress, persistedAirdrop);
       void saveAllocationCheck(selectedAddress, persistedAirdrop);
+      setTaskGateReady(true);
       return;
     }
 
     void calculateAllocation(selectedAddress);
-  }, [selectedAddress, airdrops]);
+  }, [selectedAddress, airdrops, taskUnlocked]);
 
   useAccountEffect({
     onDisconnect() {
@@ -453,6 +614,144 @@ export default function SpeakerAIDashboard() {
 
         <AnimatePresence mode="wait">
           {selectedAddress ? (
+            shouldShowTaskGate ? (
+              <motion.div
+                key="task-gate"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="max-w-4xl mx-auto"
+              >
+                <div className="glass-card p-8 sm:p-10 lg:p-12 rounded-[40px] border border-brand-red/20">
+                  <div className="flex flex-col lg:flex-row gap-8 lg:items-start lg:justify-between">
+                    <div className="max-w-2xl">
+                      <p className="text-[10px] text-brand-red-glow uppercase tracking-[0.35em] font-black mb-4">
+                        Required Task
+                      </p>
+                      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-black tracking-tight mb-5 leading-[0.95]">
+                        Follow and repost on X before revealing your allocation
+                      </h2>
+                      <p className="text-white/60 text-base sm:text-lg leading-relaxed">
+                        Complete both steps below, then unlock your SpeakerAI allocation for{' '}
+                        <span className="text-white font-mono">{shortenAddress(selectedAddress)}</span>.
+                      </p>
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 min-w-[220px]">
+                      <span className="text-[10px] text-white/40 uppercase tracking-[0.35em] font-bold block mb-2">
+                        Wallet
+                      </span>
+                      <span className="text-lg font-mono font-bold text-white">
+                        {shortenAddress(selectedAddress)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-10">
+                    <div className="rounded-[28px] border border-white/10 bg-white/5 p-6">
+                      <div className="flex items-center justify-between gap-4 mb-5">
+                        <div>
+                          <p className="text-[10px] text-white/35 uppercase tracking-[0.35em] font-black mb-2">
+                            Step 1
+                          </p>
+                          <h3 className="text-2xl font-display font-black tracking-tight">
+                            Follow @{X_HANDLE}
+                          </h3>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.25em] border ${
+                          followTaskDone
+                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                            : 'bg-white/5 text-white/40 border-white/10'
+                        }`}>
+                          {followTaskDone ? 'Done' : 'Pending'}
+                        </div>
+                      </div>
+                      <p className="text-white/55 text-sm leading-relaxed mb-6">
+                        Follow the official SpeakerAI X account to continue with the allocation reveal.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openTaskLink(X_FOLLOW_URL, 'follow')}
+                        disabled={activeTaskLoading === 'follow'}
+                        className="w-full rounded-2xl bg-white text-black hover:bg-brand-red hover:text-white px-5 py-4 text-sm font-black uppercase tracking-[0.25em] transition-all flex items-center justify-center gap-3"
+                      >
+                        {activeTaskLoading === 'follow' ? (
+                          <>
+                            <LoaderCircle className="w-4 h-4 animate-spin" />
+                            {activeTaskPhase === 'verifying' ? 'Verifying now' : 'Opening X'}
+                          </>
+                        ) : (
+                          <>
+                            Follow on X
+                            <ExternalLink className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="rounded-[28px] border border-white/10 bg-white/5 p-6">
+                      <div className="flex items-center justify-between gap-4 mb-5">
+                        <div>
+                          <p className="text-[10px] text-white/35 uppercase tracking-[0.35em] font-black mb-2">
+                            Step 2
+                          </p>
+                          <h3 className="text-2xl font-display font-black tracking-tight">
+                            Repost the campaign
+                          </h3>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.25em] border ${
+                          repostTaskDone
+                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                            : 'bg-white/5 text-white/40 border-white/10'
+                        }`}>
+                          {repostTaskDone ? 'Done' : 'Pending'}
+                        </div>
+                      </div>
+                      <p className="text-white/55 text-sm leading-relaxed mb-6">
+                        Repost the SpeakerAI campaign on X, then unlock your allocation below.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openTaskLink(X_REPOST_URL, 'repost')}
+                        disabled={activeTaskLoading === 'repost'}
+                        className="w-full rounded-2xl bg-white/5 border border-white/10 hover:bg-brand-red hover:border-brand-red hover:text-white px-5 py-4 text-sm font-black uppercase tracking-[0.25em] transition-all flex items-center justify-center gap-3"
+                      >
+                        {activeTaskLoading === 'repost' ? (
+                          <>
+                            <LoaderCircle className="w-4 h-4 animate-spin" />
+                            {activeTaskPhase === 'verifying' ? 'Verifying now' : 'Opening X'}
+                          </>
+                        ) : (
+                          <>
+                            Repost on X
+                            <ExternalLink className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 rounded-[28px] border border-brand-red/20 bg-brand-red/10 p-6 flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-[10px] text-brand-red-glow uppercase tracking-[0.35em] font-black mb-2">
+                        Unlock Allocation
+                      </p>
+                      <p className="text-white/60 text-sm">
+                        The allocation view appears after both tasks are marked complete.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={unlockAllocation}
+                      disabled={!followTaskDone || !repostTaskDone}
+                      className="rounded-2xl bg-brand-red hover:bg-brand-red-glow disabled:bg-brand-red/30 disabled:text-white/40 px-6 py-4 text-sm font-black uppercase tracking-[0.25em] transition-all"
+                    >
+                      Reveal Allocation
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
             <motion.div
               key="dashboard"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -462,7 +761,7 @@ export default function SpeakerAIDashboard() {
             >
               <div className="glass-card p-8 lg:p-10 rounded-3xl flex flex-col justify-between relative overflow-hidden lg:col-span-2 min-h-[460px]">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(139,0,0,0.22),transparent_38%)]" />
-                {!airdrop.loading && airdrop.isEligible && (
+                {!visibleAirdrop.loading && visibleAirdrop.isEligible && (
                   <div className="absolute top-0 right-0 w-48 h-48 bg-brand-red/20 blur-[90px] -mr-16 -mt-16" />
                 )}
 
@@ -473,16 +772,16 @@ export default function SpeakerAIDashboard() {
                     </div>
                     <div
                       className={`px-4 py-2 text-[10px] font-bold rounded-full border uppercase tracking-[0.25em] ${
-                        !airdrop.loading && airdrop.isEligible
+                        !visibleAirdrop.loading && visibleAirdrop.isEligible
                           ? 'bg-brand-red/10 text-brand-red border-brand-red/20 red-glow'
                           : 'bg-white/5 text-white/40 border-white/10'
                       }`}
                     >
-                      {airdrop.loading ? 'Processing' : airdrop.isEligible ? 'Eligible' : 'Not Eligible'}
+                      {visibleAirdrop.loading ? 'Processing' : visibleAirdrop.isEligible ? 'Eligible' : 'Not Eligible'}
                     </div>
                   </div>
 
-                  {airdrop.loading ? (
+                  {visibleAirdrop.loading ? (
                     <>
                       <p className="text-[10px] text-white/40 uppercase tracking-[0.35em] font-bold mb-4">Allocation</p>
                       <div className="w-20 h-20 rounded-full border border-brand-red/30 bg-brand-red/10 flex items-center justify-center mb-8 red-glow-strong">
@@ -497,12 +796,12 @@ export default function SpeakerAIDashboard() {
                     <>
                       <p className="text-[10px] text-white/40 uppercase tracking-[0.35em] font-bold mb-4">Total Allocation</p>
                       <div className="flex items-baseline gap-3 mb-4">
-                        <span className={`text-7xl lg:text-8xl font-display font-black ${airdrop.isEligible ? 'text-white' : 'text-white/20'}`}>
-                          {airdrop.allocation.toLocaleString()}
+                        <span className={`text-7xl lg:text-8xl font-display font-black ${visibleAirdrop.isEligible ? 'text-white' : 'text-white/20'}`}>
+                          {visibleAirdrop.allocation.toLocaleString()}
                         </span>
                         <span className="text-brand-red font-bold text-xl lg:text-2xl">SPKR</span>
                       </div>
-                      {airdrop.isEligible ? (
+                      {visibleAirdrop.isEligible ? (
                         <p className="text-base text-white/60 max-w-2xl">
                           Your wallet qualified in the snapshot and is eligible for this estimated SPKR allocation.
                         </p>
@@ -640,15 +939,15 @@ export default function SpeakerAIDashboard() {
                       </div>
                       <button
                         onClick={() => selectedAddress && calculateAllocation(selectedAddress)}
-                        disabled={airdrop.loading}
+                        disabled={visibleAirdrop.loading}
                         className="p-2 hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50"
                       >
-                        <RefreshCcw className={`w-4 h-4 text-white/40 ${airdrop.loading ? 'animate-spin' : ''}`} />
+                        <RefreshCcw className={`w-4 h-4 text-white/40 ${visibleAirdrop.loading ? 'animate-spin' : ''}`} />
                       </button>
                     </div>
                     <h3 className="text-white/40 text-xs font-bold uppercase tracking-widest mb-2">Snapshot Activity</h3>
                     <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-6xl font-display font-black text-brand-red">{airdrop.loading ? '...' : airdrop.txCount}</span>
+                      <span className="text-6xl font-display font-black text-brand-red">{visibleAirdrop.loading ? '...' : visibleAirdrop.txCount}</span>
                       <span className="text-white/40 font-bold">TXS</span>
                     </div>
                     <p className="text-sm text-white/60">
@@ -664,13 +963,13 @@ export default function SpeakerAIDashboard() {
                     <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
                       <span className="text-white/40">Progress</span>
                       <span className="text-brand-red">
-                        {Math.min(Math.round((airdrop.txCount / MIN_TX_ELIGIBLE) * 100), 100)}%
+                        {Math.min(Math.round((visibleAirdrop.txCount / MIN_TX_ELIGIBLE) * 100), 100)}%
                       </span>
                     </div>
                     <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${Math.min((airdrop.txCount / MIN_TX_ELIGIBLE) * 100, 100)}%` }}
+                        animate={{ width: `${Math.min((visibleAirdrop.txCount / MIN_TX_ELIGIBLE) * 100, 100)}%` }}
                         className="h-full bg-brand-red red-glow"
                       />
                     </div>
@@ -684,6 +983,7 @@ export default function SpeakerAIDashboard() {
                 </div>
               </div>
             </motion.div>
+            )
           ) : (
             <motion.div
               key="empty"
