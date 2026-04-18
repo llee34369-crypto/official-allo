@@ -23,7 +23,7 @@ const WHITELIST_SUBMITTED_WALLET_KEY = 'speakerai-testnet-whitelist-wallet';
 
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
-  x: 'https://x.com/SpeakerAI_BNB',
+  x: 'https://x.com/SpeakerProtocol',
   discord: 'https://discord.gg/tyAE9eeE8c',
 } as const;
 
@@ -76,7 +76,6 @@ export default function WhitelistPage() {
 
   const connectWallet = () => open({ view: 'Connect' });
   const disconnectWallet = () => disconnect();
-  const hasSubmittedOnThisBrowser = Boolean(submittedWallet);
   const normalizedConnectedWallet =
     isConnected && address ? normalizeAddress(address) : null;
   const normalizedSubmittedWallet = submittedWallet
@@ -298,7 +297,6 @@ export default function WhitelistPage() {
                       Disconnect
                     </button>
                   ) : null}
-
                 </div>
                 <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0">

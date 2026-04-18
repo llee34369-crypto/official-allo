@@ -44,7 +44,7 @@ const X_REPOST_URL =
 
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
-  x: 'https://x.com/SpeakerAI_BNB',
+  x: 'https://x.com/SpeakerProtocol',
   discord: 'https://discord.gg/tyAE9eeE8c',
 } as const;
 
