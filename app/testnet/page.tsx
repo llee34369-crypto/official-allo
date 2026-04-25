@@ -6,8 +6,20 @@ import { motion } from 'motion/react';
 import { AppKit } from '@web3modal/base';
 import { ConnectorController, OptionsController } from '@web3modal/core';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
-import { useAccount, useConnections, useConnectors, useDisconnect } from 'wagmi';
-import { ArrowLeft, ChevronRight, ExternalLink, Sparkles, Wallet, Zap } from 'lucide-react';
+import { useAccount, useConnections, useConnectors, useDisconnect, useSignMessage } from 'wagmi';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronRight,
+  Sparkles,
+  Wallet,
+  Zap,
+} from 'lucide-react';
+import {
+  DOWNLOAD_SPK_WALLET_QUEST_ID,
+  DOWNLOAD_SPK_WALLET_QUEST_REWARD_POINTS,
+  getTestnetQuestOwnershipMessage,
+} from '@/lib/testnet-quest-message';
 
 const TESTNET_AIRDROP_POOL = 10000000;
 
@@ -16,6 +28,46 @@ const SOCIAL_LINKS = {
   x: 'https://x.com/SpeakerProtocol',
   discord: 'https://discord.gg/tyAE9eeE8c',
 } as const;
+
+interface WalletPointsRealtimeConfig {
+  wsUrl: string;
+  anonKey: string;
+  schema: string;
+  table: string;
+  walletColumn: string;
+  pointsColumn: string;
+}
+
+interface WalletPointsResponse {
+  error?: string;
+  ok?: boolean;
+  warning?: string;
+  points?: number;
+}
+
+interface WalletPointsRealtimeConfigResponse {
+  error?: string;
+  ok?: boolean;
+  warning?: string;
+  realtime?: WalletPointsRealtimeConfig;
+}
+
+interface RealtimePostgresChangeRecord {
+  [key: string]: string | number | boolean | null | undefined;
+}
+
+interface RealtimeMessagePayload {
+  data?: {
+    record?: RealtimePostgresChangeRecord;
+  };
+  status?: string;
+  message?: string;
+}
+
+interface RealtimeMessage {
+  event?: string;
+  payload?: RealtimeMessagePayload;
+}
 
 function XLogo(props: SVGProps<SVGSVGElement>) {
   return (
@@ -56,6 +108,8 @@ const matchesSpkWallet = (value: { id?: string; name?: string; rdns?: string | r
 };
 
 export default function WhitelistPage() {
+  const spkWalletQuestPoints = DOWNLOAD_SPK_WALLET_QUEST_REWARD_POINTS;
+  const autoClaimAttemptedRef = useRef<string | null>(null);
   const originalConnectorStateRef = useRef<{
     unMergedConnectors: typeof ConnectorController.state.unMergedConnectors;
     connectors: typeof ConnectorController.state.connectors;
@@ -71,9 +125,14 @@ export default function WhitelistPage() {
   const connections = useConnections();
   const connectors = useConnectors();
   const { disconnect } = useDisconnect();
+  const { signMessageAsync } = useSignMessage();
   const [walletPoints, setWalletPoints] = useState<number | null>(null);
   const [walletPointsLoading, setWalletPointsLoading] = useState(false);
   const [walletPointsWarning, setWalletPointsWarning] = useState<string | null>(null);
+  const [questClaimStatus, setQuestClaimStatus] = useState<'idle' | 'claiming' | 'claimed'>('idle');
+  const [questClaimWarning, setQuestClaimWarning] = useState<string | null>(null);
+  const [downloadSpkWalletQuestClaimed, setDownloadSpkWalletQuestClaimed] = useState(false);
+  const [walletVerifiedForSession, setWalletVerifiedForSession] = useState(false);
   const spkConnector = connectors.find((connector) =>
     matchesSpkWallet({
       id: connector.id,
@@ -87,54 +146,273 @@ export default function WhitelistPage() {
     name: activeConnector?.name,
     rdns: activeConnector?.rdns,
   });
+  const canClaimSpkWalletQuest = Boolean(isConnected && address && isConnectedWithSpkWallet);
+  const hasCompletedSpkWalletQuest = downloadSpkWalletQuestClaimed;
+  const hasUnlockedTestnetPage = Boolean(canClaimSpkWalletQuest && walletVerifiedForSession);
+
+  const claimSpkWalletQuest = async () => {
+    if (!(address && canClaimSpkWalletQuest)) {
+      return;
+    }
+
+    setQuestClaimStatus('claiming');
+    setQuestClaimWarning(null);
+
+    try {
+      const signature = await signMessageAsync({
+        message: getTestnetQuestOwnershipMessage(address),
+      });
+
+      const response = await fetch('/api/testnet/quest-reward', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletAddress: address,
+          signature,
+          questId: DOWNLOAD_SPK_WALLET_QUEST_ID,
+        }),
+      });
+
+      const payload = (await response.json()) as
+        | {
+            error?: string;
+            ok?: boolean;
+            points?: number;
+            status?: string;
+            rewardPoints?: number;
+            alreadyClaimed?: boolean;
+          }
+        | undefined;
+
+      if (!response.ok || payload?.ok !== true) {
+        throw new Error(payload?.error || 'Unable to claim the testnet quest reward.');
+      }
+
+      setWalletVerifiedForSession(true);
+      setDownloadSpkWalletQuestClaimed(true);
+      setQuestClaimStatus('claimed');
+      setWalletPoints((currentPoints) =>
+        typeof payload?.points === 'number' ? payload.points : currentPoints
+      );
+      setWalletPointsWarning(null);
+      setQuestClaimWarning(
+        payload?.alreadyClaimed
+          ? 'Your wallet is connected. This reward has already been claimed, so your SP balance stays the same.'
+          : null
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to claim the testnet quest reward.';
+
+      if (message.toLowerCase().includes('user rejected')) {
+        setQuestClaimWarning('Signature request was cancelled. Use Verify ownership to try again.');
+      } else {
+        setQuestClaimWarning(message);
+      }
+
+      setQuestClaimStatus(walletVerifiedForSession ? 'claimed' : 'idle');
+    }
+  };
 
   useEffect(() => {
     if (!(isConnected && address && isConnectedWithSpkWallet)) {
       setWalletPoints(null);
       setWalletPointsLoading(false);
       setWalletPointsWarning(null);
+      setDownloadSpkWalletQuestClaimed(false);
+      setWalletVerifiedForSession(false);
+      setQuestClaimStatus('idle');
+      setQuestClaimWarning(null);
+      autoClaimAttemptedRef.current = null;
       return;
     }
 
     const abortController = new AbortController();
+    const normalizedAddress = address.toLowerCase();
+    let shouldReconnect = true;
+    let reconnectTimeoutId: number | null = null;
+    let heartbeatIntervalId: number | null = null;
+    let socket: WebSocket | null = null;
+    let messageRef = 1;
 
-    const loadWalletPoints = async () => {
+    const clearRealtimeConnection = () => {
+      if (reconnectTimeoutId !== null) {
+        window.clearTimeout(reconnectTimeoutId);
+        reconnectTimeoutId = null;
+      }
+
+      if (heartbeatIntervalId !== null) {
+        window.clearInterval(heartbeatIntervalId);
+        heartbeatIntervalId = null;
+      }
+
+      if (socket) {
+        socket.close();
+        socket = null;
+      }
+    };
+
+    const connectRealtime = (realtime: WalletPointsRealtimeConfig) => {
+      clearRealtimeConnection();
+
+      const topic = `realtime:testnet-wallet-points-${normalizedAddress}`;
+      socket = new WebSocket(
+        `${realtime.wsUrl}?apikey=${encodeURIComponent(realtime.anonKey)}&vsn=1.0.0`
+      );
+
+      socket.addEventListener('open', () => {
+        messageRef = 1;
+
+        socket?.send(
+          JSON.stringify({
+            topic,
+            event: 'phx_join',
+            payload: {
+              config: {
+                broadcast: { ack: false, self: false },
+                presence: { enabled: false },
+                postgres_changes: [
+                  {
+                    event: '*',
+                    schema: realtime.schema,
+                    table: realtime.table,
+                    filter: `${realtime.walletColumn}=eq.${normalizedAddress}`,
+                  },
+                ],
+                private: false,
+              },
+            },
+            ref: '1',
+            join_ref: '1',
+          })
+        );
+
+        heartbeatIntervalId = window.setInterval(() => {
+          if (socket?.readyState !== WebSocket.OPEN) {
+            return;
+          }
+
+          messageRef += 1;
+          socket.send(
+            JSON.stringify({
+              topic: 'phoenix',
+              event: 'heartbeat',
+              payload: {},
+              ref: String(messageRef),
+            })
+          );
+        }, 20000);
+      });
+
+      socket.addEventListener('message', (event) => {
+        try {
+          const message = JSON.parse(event.data) as RealtimeMessage;
+
+          if (message.event === 'postgres_changes') {
+            const record = message.payload?.data?.record;
+            const nextPoints = Number(record?.[realtime.pointsColumn] ?? 0);
+
+            if (!Number.isNaN(nextPoints)) {
+              setWalletPoints(nextPoints);
+              setWalletPointsWarning(null);
+            }
+
+            return;
+          }
+
+          if (message.event === 'system' && message.payload?.status === 'error') {
+            setWalletPointsWarning('Live point updates are unavailable right now.');
+          }
+        } catch (error) {
+          console.error('Failed to parse wallet points realtime message:', error);
+        }
+      });
+
+      socket.addEventListener('error', () => {
+        setWalletPointsWarning((currentWarning) =>
+          currentWarning ?? 'Live point updates are unavailable right now.'
+        );
+      });
+
+      socket.addEventListener('close', () => {
+        if (heartbeatIntervalId !== null) {
+          window.clearInterval(heartbeatIntervalId);
+          heartbeatIntervalId = null;
+        }
+
+        if (!shouldReconnect || abortController.signal.aborted) {
+          return;
+        }
+
+        reconnectTimeoutId = window.setTimeout(() => {
+          connectRealtime(realtime);
+        }, 3000);
+      });
+    };
+
+    const initializeWalletPoints = async () => {
       setWalletPointsLoading(true);
       setWalletPointsWarning(null);
 
       try {
-        const response = await fetch(
-          `/api/testnet/wallet-points?address=${encodeURIComponent(address)}`,
-          {
+        const [walletPointsResponse, realtimeConfigResponse] = await Promise.all([
+          fetch(`/api/testnet/wallet-points?address=${encodeURIComponent(address)}`, {
             method: 'GET',
             cache: 'no-store',
             signal: abortController.signal,
-          }
-        );
+          }),
+          fetch('/api/testnet/realtime-config', {
+            method: 'GET',
+            cache: 'no-store',
+            signal: abortController.signal,
+          }),
+        ]);
 
-        const payload = (await response.json()) as
-          | { error?: string; ok?: boolean; warning?: string; points?: number }
+        const walletPointsPayload = (await walletPointsResponse.json()) as
+          | WalletPointsResponse
+          | undefined;
+        const realtimeConfigPayload = (await realtimeConfigResponse.json()) as
+          | WalletPointsRealtimeConfigResponse
           | undefined;
 
-        if (!response.ok) {
-          throw new Error(payload?.error || 'Unable to load wallet points.');
+        if (!walletPointsResponse.ok) {
+          throw new Error(walletPointsPayload?.error || 'Unable to load wallet points.');
         }
 
-        if (payload?.ok === false) {
+        if (walletPointsPayload?.ok === false) {
           setWalletPoints(null);
           setWalletPointsWarning(
-            payload.warning || 'Unable to load SPK Wallet SP points right now.'
+            walletPointsPayload.warning || 'Unable to load SPK Wallet SP points right now.'
           );
           return;
         }
 
-        setWalletPoints(typeof payload?.points === 'number' ? payload.points : 0);
+        setWalletPoints(
+          typeof walletPointsPayload?.points === 'number' ? walletPointsPayload.points : 0
+        );
+        setDownloadSpkWalletQuestClaimed(false);
+        setWalletVerifiedForSession(false);
+        setQuestClaimStatus('idle');
+
+        if (
+          realtimeConfigResponse.ok &&
+          realtimeConfigPayload?.ok &&
+          realtimeConfigPayload.realtime
+        ) {
+          connectRealtime(realtimeConfigPayload.realtime);
+        } else if (realtimeConfigPayload?.warning) {
+          setWalletPointsWarning(
+            (currentWarning) => currentWarning ?? realtimeConfigPayload.warning ?? null
+          );
+        }
       } catch (error) {
         if (abortController.signal.aborted) {
           return;
         }
 
-        console.error('Failed to fetch SPK wallet points:', error);
+        console.error('Failed to initialize SPK wallet points:', error);
         setWalletPoints(null);
         setWalletPointsWarning('Unable to load SPK Wallet SP points right now.');
       } finally {
@@ -144,12 +422,37 @@ export default function WhitelistPage() {
       }
     };
 
-    void loadWalletPoints();
+    void initializeWalletPoints();
 
     return () => {
+      shouldReconnect = false;
       abortController.abort();
+      clearRealtimeConnection();
     };
   }, [address, isConnected, isConnectedWithSpkWallet]);
+
+  useEffect(() => {
+    if (!(address && canClaimSpkWalletQuest) || walletVerifiedForSession) {
+      return;
+    }
+
+    if (questClaimStatus === 'claiming' || walletPointsLoading) {
+      return;
+    }
+
+    if (autoClaimAttemptedRef.current === address.toLowerCase()) {
+      return;
+    }
+
+    autoClaimAttemptedRef.current = address.toLowerCase();
+    void claimSpkWalletQuest();
+  }, [
+    address,
+    canClaimSpkWalletQuest,
+    questClaimStatus,
+    walletVerifiedForSession,
+    walletPointsLoading,
+  ]);
 
   useEffect(() => {
     if (!originalModalOptionsRef.current) {
@@ -228,9 +531,10 @@ export default function WhitelistPage() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#080203] text-white selection:bg-brand-red selection:text-white">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(170,24,24,0.38),_transparent_38%),radial-gradient(circle_at_bottom_right,_rgba(120,12,12,0.32),_transparent_32%),linear-gradient(180deg,_rgba(24,4,4,0.96),_rgba(6,2,2,1))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(170,24,24,0.42),_transparent_34%),radial-gradient(circle_at_80%_22%,_rgba(255,112,112,0.12),_transparent_22%),radial-gradient(circle_at_bottom_right,_rgba(120,12,12,0.36),_transparent_30%),linear-gradient(180deg,_rgba(24,4,4,0.96),_rgba(6,2,2,1))]" />
         <div className="absolute top-[12%] left-[8%] h-72 w-72 rounded-full bg-[#a31414]/20 blur-[120px]" />
         <div className="absolute bottom-[10%] right-[6%] h-80 w-80 rounded-full bg-[#6e0d0d]/20 blur-[140px]" />
+        <div className="absolute left-0 right-0 top-[120px] h-px bg-[linear-gradient(90deg,transparent,rgba(255,80,80,0.4),transparent)]" />
       </div>
 
       <nav className="relative z-10 border-b border-white/5 bg-black/30 backdrop-blur-md">
@@ -289,13 +593,70 @@ export default function WhitelistPage() {
                 Testnet
               </div>
               <h2 className="mb-4 font-display text-4xl font-black tracking-tight text-white lg:text-6xl">
-                SPK Wallet Access
+                SP points
               </h2>
               <p className="max-w-2xl text-base leading-relaxed text-white/65 lg:text-lg">
-                Connect with SPK Wallet to open your testnet dashboard and track your progress.
+                SP points are the keypoints of the SpeakerAI Protocol Testnet — Earn SP Points by using the SpeakerAI Testnet
               </p>
               <div className="mt-8 flex w-full flex-col items-center gap-6">
-                {isConnected && address && isConnectedWithSpkWallet ? (
+                {isConnected && address && isConnectedWithSpkWallet && !hasUnlockedTestnetPage ? (
+                  <>
+                    <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white/85">
+                      <Wallet className="h-4 w-4 text-brand-red-glow" />
+                      {shortenAddress(address)}
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-emerald-200">
+                        SPK Wallet
+                      </span>
+                    </div>
+                    <div className="w-full max-w-2xl rounded-[28px] border border-white/10 bg-white/[0.04] p-6 text-left">
+                      <div className="mb-4 flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                          <Wallet className="h-5 w-5 text-brand-red-glow" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                            Access
+                          </p>
+                          <p className="text-lg font-bold text-white">Sign in with your SPK Wallet</p>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/30 px-5 py-6 text-center">
+                        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/40">
+                          Required each time
+                        </p>
+                        <p className="mt-3 font-display text-3xl font-black tracking-tight text-white">
+                          Sign with your SPK Wallet
+                        </p>
+                        <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-white/55">
+                          Sign to open your testnet dashboard. Your wallet can earn +{spkWalletQuestPoints} SP the first time it completes this step.
+                        </p>
+                        <div className="mt-6 flex flex-col items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => void claimSpkWalletQuest()}
+                            disabled={questClaimStatus === 'claiming'}
+                            className="rounded-2xl bg-brand-red px-6 py-4 text-sm font-black uppercase tracking-[0.28em] text-white transition-all hover:bg-brand-red-glow disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {questClaimStatus === 'claiming' ? 'Waiting for Signature...' : 'Sign Wallet to Continue'}
+                          </button>
+                          <p className="text-xs text-white/45">
+                            Your dashboard opens right after you sign.
+                          </p>
+                        </div>
+                        {questClaimWarning ? (
+                          <p className="mt-4 text-sm text-[#ffb0b0]">{questClaimWarning}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => disconnect()}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-black uppercase tracking-[0.28em] text-white/75 transition-all hover:bg-white/10 hover:text-white"
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                ) : isConnected && address && isConnectedWithSpkWallet ? (
                   <>
                     <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white/85">
                       <Wallet className="h-4 w-4 text-brand-red-glow" />
@@ -312,57 +673,36 @@ export default function WhitelistPage() {
                           </div>
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
-                              Your Progress
+                              Your Wallet SP points Balance
                             </p>
-                            <p className="text-lg font-bold text-white">Your points</p>
+                            <p className="text-lg font-bold text-white">SP points</p>
                           </div>
                         </div>
                         <div className="rounded-2xl border border-white/10 bg-black/30 px-5 py-6">
                           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/40">
-                            SPK Wallet points
+                            SP Balance
                           </p>
-                          <p className="mt-3 font-display text-5xl font-black tracking-tight text-white">
+                          <div className="mt-3 flex items-end gap-2">
+                            <p className="font-display text-5xl font-black tracking-tight text-white">
                             {walletPointsLoading
                               ? 'Loading...'
                               : walletPoints !== null
                                 ? formatPoints(walletPoints)
                                 : '--'}
-                          </p>
+                            </p>
+                            {!walletPointsLoading && walletPoints !== null ? (
+                              <span className="pb-1 text-sm font-black uppercase tracking-[0.28em] text-brand-red-glow">
+                                SP
+                              </span>
+                            ) : null}
+                          </div>
                           <p className="mt-3 max-w-md text-sm leading-relaxed text-white/55">
-                            Your current SpeakerAI testnet points are shown here for the connected SPK Wallet.
+                            This is your current SP Points balance for your connected SPK Wallet.
+Earn more points by completing quests and interacting with the protocol.
                           </p>
                           {walletPointsWarning ? (
                             <p className="mt-3 text-sm text-[#ffb0b0]">{walletPointsWarning}</p>
                           ) : null}
-                        </div>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                          <a
-                            href={SOCIAL_LINKS.website}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white/80 transition-all hover:border-brand-red/40 hover:text-white"
-                          >
-                            Website
-                            <ExternalLink className="h-4 w-4 text-brand-red-glow" />
-                          </a>
-                          <a
-                            href={SOCIAL_LINKS.x}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white/80 transition-all hover:border-brand-red/40 hover:text-white"
-                          >
-                            X
-                            <ExternalLink className="h-4 w-4 text-brand-red-glow" />
-                          </a>
-                          <a
-                            href={SOCIAL_LINKS.discord}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white/80 transition-all hover:border-brand-red/40 hover:text-white"
-                          >
-                            Discord
-                            <ExternalLink className="h-4 w-4 text-brand-red-glow" />
-                          </a>
                         </div>
                       </div>
 
@@ -381,23 +721,46 @@ export default function WhitelistPage() {
                           </div>
                         </div>
                         <div className="relative space-y-3 rounded-2xl border border-white/10 bg-black/35 p-4">
-                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/45">
-                            Complete social actions
-                          </div>
-                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/45">
-                            Invite friends
-                          </div>
-                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/45">
-                            Daily activity streaks
-                          </div>
-                          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/45">
-                            <div className="rounded-full border border-white/10 bg-white/10 px-5 py-2 text-sm font-black uppercase tracking-[0.28em] text-white/80">
-                              Coming soon...
+                          <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-left">
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-white">Verify SPK Wallet ownership</p>
+                              <p className="mt-1 text-xs leading-relaxed text-white/50">
+                                Sign in with your SPK Wallet to continue. This reward is available once per wallet.
+                              </p>
                             </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <span className="rounded-full border border-[#ff7c7c]/20 bg-[#6d0e0e]/30 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-[#ffb0b0]">
+                                +{spkWalletQuestPoints} SP
+                              </span>
+                              <span
+                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] ${
+                                  hasCompletedSpkWalletQuest
+                                    ? 'border border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+                                    : 'border border-white/10 bg-white/5 text-white/55'
+                                }`}
+                              >
+                                {hasCompletedSpkWalletQuest ? (
+                                  <>
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    Completed
+                                  </>
+                                ) : questClaimStatus === 'claiming' ? (
+                                  'Verifying'
+                                ) : (
+                                  'Verify ownership'
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-4">
+                            <p className="text-sm font-bold text-white/80">More quests coming soon</p>
+                            <p className="mt-1 text-xs leading-relaxed text-white/45">
+                              New testnet quests and SP rewards will be added here soon.
+                            </p>
                           </div>
                         </div>
                         <p className="relative mt-4 max-w-md text-sm leading-relaxed text-white/50">
-                          Quests will appear here once they are live for users.
+                          You can earn SP points in the wallet for every confirmed transaction.
                         </p>
                       </div>
                     </div>
@@ -438,7 +801,7 @@ export default function WhitelistPage() {
                       <ChevronRight className="h-4 w-4" />
                     </button>
                     <p className="text-sm text-white/50">
-                      This button opens the official WalletConnect modal with SPK Wallet only on this page.
+                      
                     </p>
                     {!spkConnector ? (
                       <p className="max-w-md text-sm text-[#ffb0b0]">

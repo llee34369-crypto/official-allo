@@ -4,15 +4,39 @@ interface WalletPointsRow {
   [key: string]: string | number | null | undefined;
 }
 
+interface AddWalletPointsResultRow {
+  total_points?: number | string | null;
+  added_points?: number | string | null;
+}
+
+interface ClaimQuestRewardResultRow {
+  total_points?: number | string | null;
+  added_points?: number | string | null;
+  already_claimed?: boolean | null;
+}
+
 export interface WalletPointsEntry {
   walletAddress: string;
   totalPoints: number;
+}
+
+export interface AddWalletPointsResult {
+  totalPoints: number;
+  addedPoints: number;
+}
+
+export interface ClaimQuestRewardResult {
+  totalPoints: number;
+  addedPoints: number;
+  alreadyClaimed: boolean;
 }
 
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const DEFAULT_TABLE_NAME = 'wallet_points';
 const DEFAULT_WALLET_COLUMN = 'wallet_address';
 const DEFAULT_POINTS_COLUMN = 'total_points';
+const DEFAULT_ADD_POINTS_RPC = 'add_wallet_points';
+const DEFAULT_CLAIM_QUEST_REWARD_RPC = 'claim_testnet_quest_reward';
 const MISSING_CONFIG_ERROR =
   'Missing TESTNET_POINTS_SUPABASE_URL or TESTNET_POINTS_SUPABASE_SERVICE_ROLE_KEY in the environment.';
 
@@ -59,6 +83,16 @@ function getTestnetWalletPointsConfig() {
       process.env.TESTNET_POINTS_VALUE_COLUMN,
       DEFAULT_POINTS_COLUMN,
       'TESTNET_POINTS_VALUE_COLUMN'
+    ),
+    addPointsRpc: getIdentifier(
+      process.env.TESTNET_ADD_POINTS_RPC,
+      DEFAULT_ADD_POINTS_RPC,
+      'TESTNET_ADD_POINTS_RPC'
+    ),
+    claimQuestRewardRpc: getIdentifier(
+      process.env.TESTNET_CLAIM_QUEST_REWARD_RPC,
+      DEFAULT_CLAIM_QUEST_REWARD_RPC,
+      'TESTNET_CLAIM_QUEST_REWARD_RPC'
     ),
   };
 }
@@ -114,4 +148,74 @@ export async function findWalletPoints(walletAddress: string) {
     walletAddress: String(row[walletColumn] ?? normalizedWalletAddress),
     totalPoints: Number(row[pointsColumn] ?? 0),
   } satisfies WalletPointsEntry;
+}
+
+export async function addWalletPoints(walletAddress: string, pointsToAdd: number) {
+  const normalizedWalletAddress = walletAddress.toLowerCase();
+  const normalizedPointsToAdd = Math.trunc(pointsToAdd);
+  const { addPointsRpc } = getTestnetWalletPointsConfig();
+
+  if (normalizedPointsToAdd <= 0) {
+    throw new Error('Points to add must be greater than zero.');
+  }
+
+  const response = await testnetWalletPointsFetch(`/rest/v1/rpc/${addPointsRpc}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      p_wallet_address: normalizedWalletAddress,
+      p_points_to_add: normalizedPointsToAdd,
+    }),
+  });
+
+  const payload = (await response.json()) as
+    | AddWalletPointsResultRow
+    | AddWalletPointsResultRow[];
+  const row = Array.isArray(payload) ? payload[0] : payload;
+
+  return {
+    totalPoints: Number(row?.total_points ?? 0),
+    addedPoints: Number(row?.added_points ?? 0),
+  } satisfies AddWalletPointsResult;
+}
+
+export async function claimQuestReward(
+  walletAddress: string,
+  questId: string,
+  pointsToAdd: number
+) {
+  const normalizedWalletAddress = walletAddress.toLowerCase();
+  const normalizedQuestId = questId.trim().toLowerCase();
+  const normalizedPointsToAdd = Math.trunc(pointsToAdd);
+  const { claimQuestRewardRpc } = getTestnetWalletPointsConfig();
+
+  if (!normalizedQuestId) {
+    throw new Error('Quest ID is required.');
+  }
+
+  if (normalizedPointsToAdd <= 0) {
+    throw new Error('Points to add must be greater than zero.');
+  }
+
+  const response = await testnetWalletPointsFetch(
+    `/rest/v1/rpc/${claimQuestRewardRpc}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        p_wallet_address: normalizedWalletAddress,
+        p_quest_id: normalizedQuestId,
+        p_points_to_add: normalizedPointsToAdd,
+      }),
+    }
+  );
+
+  const payload = (await response.json()) as
+    | ClaimQuestRewardResultRow
+    | ClaimQuestRewardResultRow[];
+  const row = Array.isArray(payload) ? payload[0] : payload;
+
+  return {
+    totalPoints: Number(row?.total_points ?? 0),
+    addedPoints: Number(row?.added_points ?? 0),
+    alreadyClaimed: Boolean(row?.already_claimed ?? false),
+  } satisfies ClaimQuestRewardResult;
 }
