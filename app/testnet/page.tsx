@@ -292,7 +292,7 @@ export default function WhitelistPage() {
                 SPK Wallet Access
               </h2>
               <p className="max-w-2xl text-base leading-relaxed text-white/65 lg:text-lg">
-                Connect with SPK Wallet to open the testnet dashboard and check your points.
+                Connect with SPK Wallet to open your testnet dashboard and track your progress.
               </p>
               <div className="mt-8 flex w-full flex-col items-center gap-6">
                 {isConnected && address && isConnectedWithSpkWallet ? (
@@ -304,20 +304,38 @@ export default function WhitelistPage() {
                         SPK Wallet
                       </span>
                     </div>
-                    <div className="grid w-full gap-4 text-left lg:grid-cols-3">
+                    <div className="grid w-full gap-4 text-left lg:grid-cols-2">
                       <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
                         <div className="mb-4 flex items-center gap-3">
                           <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
-                            <ExternalLink className="h-5 w-5 text-brand-red-glow" />
+                            <Sparkles className="h-5 w-5 text-brand-red-glow" />
                           </div>
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
-                              Socials
+                              Your Progress
                             </p>
-                            <p className="text-lg font-bold text-white">SpeakerAI Links</p>
+                            <p className="text-lg font-bold text-white">Your points</p>
                           </div>
                         </div>
-                        <div className="flex flex-col gap-3">
+                        <div className="rounded-2xl border border-white/10 bg-black/30 px-5 py-6">
+                          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/40">
+                            SPK Wallet points
+                          </p>
+                          <p className="mt-3 font-display text-5xl font-black tracking-tight text-white">
+                            {walletPointsLoading
+                              ? 'Loading...'
+                              : walletPoints !== null
+                                ? formatPoints(walletPoints)
+                                : '--'}
+                          </p>
+                          <p className="mt-3 max-w-md text-sm leading-relaxed text-white/55">
+                            Your current SpeakerAI testnet points are shown here for the connected SPK Wallet.
+                          </p>
+                          {walletPointsWarning ? (
+                            <p className="mt-3 text-sm text-[#ffb0b0]">{walletPointsWarning}</p>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
                           <a
                             href={SOCIAL_LINKS.website}
                             target="_blank"
@@ -333,7 +351,7 @@ export default function WhitelistPage() {
                             rel="noopener noreferrer"
                             className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white/80 transition-all hover:border-brand-red/40 hover:text-white"
                           >
-                            X / Twitter
+                            X
                             <ExternalLink className="h-4 w-4 text-brand-red-glow" />
                           </a>
                           <a
@@ -348,55 +366,39 @@ export default function WhitelistPage() {
                         </div>
                       </div>
 
-                      <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-                        <div className="mb-4 flex items-center gap-3">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
-                            <Sparkles className="h-5 w-5 text-brand-red-glow" />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
-                              SP Points
-                            </p>
-                            <p className="text-lg font-bold text-white">Social points</p>
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border border-dashed border-white/10 bg-black/30 px-4 py-5">
-                          <p className="font-display text-3xl font-black tracking-tight text-white">
-                            Pending
-                          </p>
-                          <p className="mt-2 text-sm leading-relaxed text-white/50">
-                            Add the source for general SP points and this card can be connected next.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-                        <div className="mb-4 flex items-center gap-3">
+                      <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-6">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,120,120,0.08),transparent_45%)]" />
+                        <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
+                        <div className="relative mb-4 flex items-center gap-3">
                           <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
                             <Wallet className="h-5 w-5 text-brand-red-glow" />
                           </div>
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
-                              SPK Wallet
+                              Testnet
                             </p>
-                            <p className="text-lg font-bold text-white">SP points</p>
+                            <p className="text-lg font-bold text-white">Quests</p>
                           </div>
                         </div>
-                        <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-5">
-                          <p className="font-display text-3xl font-black tracking-tight text-white">
-                            {walletPointsLoading
-                              ? 'Loading...'
-                              : walletPoints !== null
-                                ? formatPoints(walletPoints)
-                                : '--'}
-                          </p>
-                          <p className="mt-2 text-sm leading-relaxed text-white/50">
-                            Pulled from the `wallet_points.total_points` row for this connected SPK wallet.
-                          </p>
-                          {walletPointsWarning ? (
-                            <p className="mt-3 text-sm text-[#ffb0b0]">{walletPointsWarning}</p>
-                          ) : null}
+                        <div className="relative space-y-3 rounded-2xl border border-white/10 bg-black/35 p-4">
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/45">
+                            Complete social actions
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/45">
+                            Invite friends
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/45">
+                            Daily activity streaks
+                          </div>
+                          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/45">
+                            <div className="rounded-full border border-white/10 bg-white/10 px-5 py-2 text-sm font-black uppercase tracking-[0.28em] text-white/80">
+                              Coming soon...
+                            </div>
+                          </div>
                         </div>
+                        <p className="relative mt-4 max-w-md text-sm leading-relaxed text-white/50">
+                          Quests will appear here once they are live for users.
+                        </p>
                       </div>
                     </div>
                     <button
