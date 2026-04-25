@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, type SVGProps } from 'react';
+import { useEffect, useRef, useState, type SVGProps } from 'react';
 import { motion } from 'motion/react';
 import { AppKit } from '@web3modal/base';
 import { ConnectorController, OptionsController } from '@web3modal/core';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { useAccount, useConnections, useConnectors, useDisconnect } from 'wagmi';
-import { ArrowLeft, ChevronRight, Wallet, Zap } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ExternalLink, Sparkles, Wallet, Zap } from 'lucide-react';
 
 const TESTNET_AIRDROP_POOL = 10000000;
 
@@ -34,6 +34,7 @@ function DiscordLogo(props: SVGProps<SVGSVGElement>) {
 }
 
 const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+const formatPoints = (value: number) => new Intl.NumberFormat('en-US').format(value);
 const SPK_WALLET_CONNECTOR_IDS = [
   'cfhicbdppkipecleloppbdmakjocgnoi',
 ]
@@ -70,6 +71,9 @@ export default function WhitelistPage() {
   const connections = useConnections();
   const connectors = useConnectors();
   const { disconnect } = useDisconnect();
+  const [walletPoints, setWalletPoints] = useState<number | null>(null);
+  const [walletPointsLoading, setWalletPointsLoading] = useState(false);
+  const [walletPointsWarning, setWalletPointsWarning] = useState<string | null>(null);
   const spkConnector = connectors.find((connector) =>
     matchesSpkWallet({
       id: connector.id,
@@ -83,6 +87,69 @@ export default function WhitelistPage() {
     name: activeConnector?.name,
     rdns: activeConnector?.rdns,
   });
+
+  useEffect(() => {
+    if (!(isConnected && address && isConnectedWithSpkWallet)) {
+      setWalletPoints(null);
+      setWalletPointsLoading(false);
+      setWalletPointsWarning(null);
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    const loadWalletPoints = async () => {
+      setWalletPointsLoading(true);
+      setWalletPointsWarning(null);
+
+      try {
+        const response = await fetch(
+          `/api/testnet/wallet-points?address=${encodeURIComponent(address)}`,
+          {
+            method: 'GET',
+            cache: 'no-store',
+            signal: abortController.signal,
+          }
+        );
+
+        const payload = (await response.json()) as
+          | { error?: string; ok?: boolean; warning?: string; points?: number }
+          | undefined;
+
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Unable to load wallet points.');
+        }
+
+        if (payload?.ok === false) {
+          setWalletPoints(null);
+          setWalletPointsWarning(
+            payload.warning || 'Unable to load SPK Wallet SP points right now.'
+          );
+          return;
+        }
+
+        setWalletPoints(typeof payload?.points === 'number' ? payload.points : 0);
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        console.error('Failed to fetch SPK wallet points:', error);
+        setWalletPoints(null);
+        setWalletPointsWarning('Unable to load SPK Wallet SP points right now.');
+      } finally {
+        if (!abortController.signal.aborted) {
+          setWalletPointsLoading(false);
+        }
+      }
+    };
+
+    void loadWalletPoints();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [address, isConnected, isConnectedWithSpkWallet]);
 
   useEffect(() => {
     if (!originalModalOptionsRef.current) {
@@ -222,17 +289,115 @@ export default function WhitelistPage() {
                 Testnet
               </div>
               <h2 className="mb-4 font-display text-4xl font-black tracking-tight text-white lg:text-6xl">
-                Coming soon...
+                SPK Wallet Access
               </h2>
               <p className="max-w-2xl text-base leading-relaxed text-white/65 lg:text-lg">
-                Testnet will open soon.
+                Connect with SPK Wallet to open the testnet dashboard and check your points.
               </p>
-              <div className="mt-8 flex flex-col items-center gap-4">
+              <div className="mt-8 flex w-full flex-col items-center gap-6">
                 {isConnected && address && isConnectedWithSpkWallet ? (
                   <>
-                    <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white/85">
+                    <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white/85">
                       <Wallet className="h-4 w-4 text-brand-red-glow" />
                       {shortenAddress(address)}
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-emerald-200">
+                        SPK Wallet
+                      </span>
+                    </div>
+                    <div className="grid w-full gap-4 text-left lg:grid-cols-3">
+                      <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+                        <div className="mb-4 flex items-center gap-3">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                            <ExternalLink className="h-5 w-5 text-brand-red-glow" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                              Socials
+                            </p>
+                            <p className="text-lg font-bold text-white">SpeakerAI Links</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                          <a
+                            href={SOCIAL_LINKS.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white/80 transition-all hover:border-brand-red/40 hover:text-white"
+                          >
+                            Website
+                            <ExternalLink className="h-4 w-4 text-brand-red-glow" />
+                          </a>
+                          <a
+                            href={SOCIAL_LINKS.x}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white/80 transition-all hover:border-brand-red/40 hover:text-white"
+                          >
+                            X / Twitter
+                            <ExternalLink className="h-4 w-4 text-brand-red-glow" />
+                          </a>
+                          <a
+                            href={SOCIAL_LINKS.discord}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white/80 transition-all hover:border-brand-red/40 hover:text-white"
+                          >
+                            Discord
+                            <ExternalLink className="h-4 w-4 text-brand-red-glow" />
+                          </a>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+                        <div className="mb-4 flex items-center gap-3">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                            <Sparkles className="h-5 w-5 text-brand-red-glow" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                              SP Points
+                            </p>
+                            <p className="text-lg font-bold text-white">Social points</p>
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-dashed border-white/10 bg-black/30 px-4 py-5">
+                          <p className="font-display text-3xl font-black tracking-tight text-white">
+                            Pending
+                          </p>
+                          <p className="mt-2 text-sm leading-relaxed text-white/50">
+                            Add the source for general SP points and this card can be connected next.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+                        <div className="mb-4 flex items-center gap-3">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                            <Wallet className="h-5 w-5 text-brand-red-glow" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                              SPK Wallet
+                            </p>
+                            <p className="text-lg font-bold text-white">SP points</p>
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-5">
+                          <p className="font-display text-3xl font-black tracking-tight text-white">
+                            {walletPointsLoading
+                              ? 'Loading...'
+                              : walletPoints !== null
+                                ? formatPoints(walletPoints)
+                                : '--'}
+                          </p>
+                          <p className="mt-2 text-sm leading-relaxed text-white/50">
+                            Pulled from the `wallet_points.total_points` row for this connected SPK wallet.
+                          </p>
+                          {walletPointsWarning ? (
+                            <p className="mt-3 text-sm text-[#ffb0b0]">{walletPointsWarning}</p>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
                     <button
                       type="button"
