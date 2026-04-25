@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAccount, useAccountEffect, useChainId, useDisconnect } from 'wagmi';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, isAddress } from 'viem';
 import { bsc } from 'viem/chains';
 import {
   AirdropData,
@@ -36,10 +36,15 @@ const MAX_USER_CAP = 50000;
 const SNAPSHOT_TIMESTAMP = BigInt(Math.floor(Date.UTC(2026, 2, 1, 0, 0, 0) / 1000));
 const SNAPSHOT_LABEL = 'Before March 1, 2026';
 const ALLOCATION_STORAGE_KEY = 'speakerai-allocation';
+const ALLOCATION_TASK_STORAGE_KEY = 'speakerai-allocation-task-unlock';
+const X_HANDLE = 'SpeakerProtocol';
+const X_FOLLOW_URL = `https://x.com/intent/follow?screen_name=${X_HANDLE}`;
+const X_REPOST_URL =
+  'https://x.com/intent/retweet?tweet_id=2048090313433006479';
 
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
-  x: 'https://x.com/SpeakerAI_BNB',
+  x: 'https://x.com/SpeakerProtocol',
   discord: 'https://discord.gg/tyAE9eeE8c',
 } as const;
 
@@ -76,11 +81,18 @@ interface PersistedAirdropData {
   allocation: number;
 }
 
+interface PersistedTaskUnlockStatus {
+  version: 1;
+  unlocked: boolean;
+}
+
 interface AllocationSnapshot {
   txCount: number;
   isEligible: boolean;
   allocation: number;
 }
+
+type TaskStatus = 'idle' | 'opening' | 'verifying' | 'done';
 
 const loadPersistedAirdrop = (walletAddress: string): AirdropData | null => {
   if (typeof window === 'undefined') {
@@ -121,6 +133,47 @@ const loadPersistedAirdrop = (walletAddress: string): AirdropData | null => {
     console.error('Unable to restore saved allocation state:', error);
     return null;
   }
+};
+
+const loadTaskUnlockStatus = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(ALLOCATION_TASK_STORAGE_KEY);
+
+    if (!rawValue) {
+      return false;
+    }
+
+    const parsedValue = JSON.parse(rawValue) as Partial<PersistedTaskUnlockStatus>;
+
+    if (
+      parsedValue.version !== 1 ||
+      typeof parsedValue.unlocked !== 'boolean'
+    ) {
+      return false;
+    }
+
+    return parsedValue.unlocked;
+  } catch (error) {
+    console.error('Unable to restore allocation task unlock status:', error);
+    return false;
+  }
+};
+
+const persistTaskUnlockStatus = (unlocked: boolean) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const payload: PersistedTaskUnlockStatus = {
+    version: 1,
+    unlocked,
+  };
+
+  window.localStorage.setItem(ALLOCATION_TASK_STORAGE_KEY, JSON.stringify(payload));
 };
 
 const persistAirdrop = (walletAddress: string, airdrop: Omit<AirdropData, 'loading' | 'error'>) => {
@@ -199,17 +252,119 @@ export default function SpeakerAIDashboard() {
   const { airdrops, setAirdrop: storeAirdrop } = useAllocationState();
 
   const [copySuccess, setCopySuccess] = useState(false);
+  const [pastedAddressInput, setPastedAddressInput] = useState('');
+  const [pastedAddress, setPastedAddress] = useState<string | null>(null);
+  const [addressInputError, setAddressInputError] = useState<string | null>(null);
+  const [taskUnlocked, setTaskUnlocked] = useState(false);
+  const [taskGateReady, setTaskGateReady] = useState(false);
+  const [followTaskDone, setFollowTaskDone] = useState(false);
+  const [repostTaskDone, setRepostTaskDone] = useState(false);
+  const [followTaskStatus, setFollowTaskStatus] = useState<TaskStatus>('idle');
+  const [repostTaskStatus, setRepostTaskStatus] = useState<TaskStatus>('idle');
+  const followTaskTimersRef = useRef<number[]>([]);
+  const repostTaskTimersRef = useRef<number[]>([]);
   const calculationRequestRef = useRef(0);
-  const airdrop = address ? (airdrops[normalizeAddress(address)] ?? getInitialAirdropState()) : getInitialAirdropState();
+  const selectedAddress = pastedAddress ?? address ?? null;
+  const isUsingPastedAddress = Boolean(pastedAddress);
+  const airdrop = selectedAddress
+    ? (airdrops[normalizeAddress(selectedAddress)] ?? getInitialAirdropState())
+    : getInitialAirdropState();
+  const shouldShowTaskGate =
+    Boolean(selectedAddress) &&
+    !taskUnlocked &&
+    taskGateReady &&
+    !airdrop.loading &&
+    !airdrop.error;
+  const visibleAirdrop =
+    Boolean(selectedAddress) &&
+    !taskUnlocked &&
+    !taskGateReady &&
+    !airdrop.error
+      ? { ...airdrop, loading: true, error: null }
+      : airdrop;
 
   const connectWallet = () => open({ view: 'Connect' });
   const disconnectWallet = () => disconnect();
 
   const copyToClipboard = () => {
-    if (!address) return;
-    navigator.clipboard.writeText(address);
+    if (!selectedAddress) return;
+    navigator.clipboard.writeText(selectedAddress);
     setCopySuccess(true);
     window.setTimeout(() => setCopySuccess(false), 2000);
+  };
+
+  const submitPastedAddress = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const nextAddress = pastedAddressInput.trim();
+
+    if (!isAddress(nextAddress)) {
+      setAddressInputError('Enter a valid BNB Smart Chain wallet address.');
+      return;
+    }
+
+    setAddressInputError(null);
+    setCopySuccess(false);
+    setPastedAddress(nextAddress);
+  };
+
+  const clearPastedAddress = () => {
+    setPastedAddress(null);
+    setPastedAddressInput('');
+    setAddressInputError(null);
+    setCopySuccess(false);
+  };
+
+  const clearTaskTimers = (task: 'follow' | 'repost') => {
+    const timerRef =
+      task === 'follow' ? followTaskTimersRef : repostTaskTimersRef;
+
+    timerRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    timerRef.current = [];
+  };
+
+  const openTaskLink = (url: string, task: 'follow' | 'repost') => {
+    clearTaskTimers(task);
+
+    if (task === 'follow') {
+      setFollowTaskStatus('opening');
+    } else {
+      setRepostTaskStatus('opening');
+    }
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+
+    const timerRef =
+      task === 'follow' ? followTaskTimersRef : repostTaskTimersRef;
+
+    const openingTimeoutId = window.setTimeout(() => {
+      if (task === 'follow') {
+        setFollowTaskStatus('verifying');
+      } else {
+        setRepostTaskStatus('verifying');
+      }
+    }, 600);
+
+    const completeTimeoutId = window.setTimeout(() => {
+      if (task === 'follow') {
+        setFollowTaskDone(true);
+        setFollowTaskStatus('done');
+      } else {
+        setRepostTaskDone(true);
+        setRepostTaskStatus('done');
+      }
+    }, 1800);
+
+    timerRef.current = [openingTimeoutId, completeTimeoutId];
+  };
+
+  const unlockAllocation = () => {
+    if (!followTaskDone || !repostTaskDone) {
+      return;
+    }
+
+    setTaskUnlocked(true);
+    persistTaskUnlockStatus(true);
   };
 
   const calculateAllocation = async (walletAddress: string) => {
@@ -252,6 +407,7 @@ export default function SpeakerAIDashboard() {
       persistAirdrop(walletAddress, nextAirdrop);
       storeAirdrop(walletAddress, nextAirdrop);
       void saveAllocationCheck(walletAddress, nextAirdrop);
+      setTaskGateReady(true);
     } catch (error) {
       if (calculationRequestRef.current !== requestId) {
         return;
@@ -268,27 +424,68 @@ export default function SpeakerAIDashboard() {
   };
 
   useEffect(() => {
-    if (!address || !isConnected) {
+    setTaskUnlocked(loadTaskUnlockStatus());
+  }, []);
+
+  useEffect(() => {
+    if (!selectedAddress) {
+      setFollowTaskDone(false);
+      setRepostTaskDone(false);
+      setTaskGateReady(false);
+      setFollowTaskStatus('idle');
+      setRepostTaskStatus('idle');
+      return;
+    }
+
+    if (taskUnlocked) {
+      setFollowTaskDone(true);
+      setRepostTaskDone(true);
+      setTaskGateReady(true);
+      setFollowTaskStatus('done');
+      setRepostTaskStatus('done');
+      return;
+    }
+
+    setFollowTaskDone(false);
+    setRepostTaskDone(false);
+    setTaskGateReady(false);
+    setFollowTaskStatus('idle');
+    setRepostTaskStatus('idle');
+  }, [selectedAddress, taskUnlocked]);
+
+  useEffect(() => {
+    return () => {
+      clearTaskTimers('follow');
+      clearTaskTimers('repost');
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedAddress) {
       return;
     }
 
     setCopySuccess(false);
-    const cachedAirdrop = airdrops[normalizeAddress(address)];
+    const cachedAirdrop = airdrops[normalizeAddress(selectedAddress)];
 
     if (cachedAirdrop) {
+      if (!cachedAirdrop.loading) {
+        setTaskGateReady(true);
+      }
       return;
     }
 
-    const persistedAirdrop = loadPersistedAirdrop(address);
+    const persistedAirdrop = loadPersistedAirdrop(selectedAddress);
 
     if (persistedAirdrop) {
-      storeAirdrop(address, persistedAirdrop);
-      void saveAllocationCheck(address, persistedAirdrop);
+      storeAirdrop(selectedAddress, persistedAirdrop);
+      void saveAllocationCheck(selectedAddress, persistedAirdrop);
+      setTaskGateReady(true);
       return;
     }
 
-    void calculateAllocation(address);
-  }, [address, airdrops, isConnected]);
+    void calculateAllocation(selectedAddress);
+  }, [selectedAddress, airdrops, taskUnlocked]);
 
   useAccountEffect({
     onDisconnect() {
@@ -368,22 +565,204 @@ export default function SpeakerAIDashboard() {
               the BNB Smart Chain ecosystem.
             </p>
 
-            {!isConnected && (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={connectWallet}
-                className="px-10 py-4 bg-brand-red hover:bg-brand-red-glow text-white rounded-full text-lg font-black transition-all red-glow-strong flex items-center gap-3 mx-auto"
-              >
-                GET STARTED
-                <ChevronRight className="w-6 h-6" />
-              </motion.button>
+            {!selectedAddress && (
+              <div className="max-w-2xl mx-auto">
+                <div className="flex flex-col sm:flex-row gap-4 justify-center mb-5">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={connectWallet}
+                    className="px-10 py-4 bg-brand-red hover:bg-brand-red-glow text-white rounded-full text-lg font-black transition-all red-glow-strong flex items-center gap-3 justify-center"
+                  >
+                    CONNECT WALLET
+                    <ChevronRight className="w-6 h-6" />
+                  </motion.button>
+                </div>
+
+                <div className="flex items-center gap-4 text-white/25 text-[10px] font-black uppercase tracking-[0.35em] mb-5">
+                  <div className="h-px flex-1 bg-white/10" />
+                  Or paste wallet address
+                  <div className="h-px flex-1 bg-white/10" />
+                </div>
+
+                <form onSubmit={submitPastedAddress} className="glass-card rounded-[30px] border border-white/10 p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="text"
+                      value={pastedAddressInput}
+                      onChange={(event) => {
+                        setPastedAddressInput(event.target.value);
+                        if (addressInputError) {
+                          setAddressInputError(null);
+                        }
+                      }}
+                      placeholder="Paste wallet address 0x..."
+                      className="flex-1 rounded-2xl border border-white/10 bg-black/35 px-4 py-4 text-sm sm:text-base text-white outline-none transition-colors placeholder:text-white/20 focus:border-brand-red/35"
+                    />
+                    <button
+                      type="submit"
+                      className="px-6 py-4 bg-white text-black hover:bg-brand-red hover:text-white rounded-2xl text-sm font-black transition-all"
+                    >
+                      CHECK
+                    </button>
+                  </div>
+                  {addressInputError ? (
+                    <p className="mt-3 text-sm text-red-300">{addressInputError}</p>
+                  ) : (
+                    <p className="mt-3 text-sm text-white/40">
+                      No wallet connection needed. Paste any BNB Smart Chain address to preview its allocation.
+                    </p>
+                  )}
+                </form>
+              </div>
             )}
           </motion.div>
         </section>
 
         <AnimatePresence mode="wait">
-          {isConnected ? (
+          {selectedAddress ? (
+            shouldShowTaskGate ? (
+              <motion.div
+                key="task-gate"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="max-w-4xl mx-auto"
+              >
+                <div className="glass-card p-8 sm:p-10 lg:p-12 rounded-[40px] border border-brand-red/20">
+                  <div className="flex flex-col lg:flex-row gap-8 lg:items-start lg:justify-between">
+                    <div className="max-w-2xl">
+                      <p className="text-[10px] text-brand-red-glow uppercase tracking-[0.35em] font-black mb-4">
+                        Required Task
+                      </p>
+                      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-black tracking-tight mb-5 leading-[0.95]">
+                        Follow and repost on X before revealing your allocation
+                      </h2>
+                      <p className="text-white/60 text-base sm:text-lg leading-relaxed">
+                        Complete both steps below, then unlock your SpeakerAI allocation for{' '}
+                        <span className="text-white font-mono">{shortenAddress(selectedAddress)}</span>.
+                      </p>
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 min-w-[220px]">
+                      <span className="text-[10px] text-white/40 uppercase tracking-[0.35em] font-bold block mb-2">
+                        Wallet
+                      </span>
+                      <span className="text-lg font-mono font-bold text-white">
+                        {shortenAddress(selectedAddress)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-10">
+                    <div className="rounded-[28px] border border-white/10 bg-white/5 p-6">
+                      <div className="flex items-center justify-between gap-4 mb-5">
+                        <div>
+                          <p className="text-[10px] text-white/35 uppercase tracking-[0.35em] font-black mb-2">
+                            Step 1
+                          </p>
+                          <h3 className="text-2xl font-display font-black tracking-tight">
+                            Follow @{X_HANDLE}
+                          </h3>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.25em] border ${
+                          followTaskDone
+                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                            : 'bg-white/5 text-white/40 border-white/10'
+                        }`}>
+                          {followTaskDone ? 'Done' : 'Pending'}
+                        </div>
+                      </div>
+                      <p className="text-white/55 text-sm leading-relaxed mb-6">
+                        Follow the official SpeakerAI X account to continue with the allocation reveal.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openTaskLink(X_FOLLOW_URL, 'follow')}
+                        disabled={followTaskStatus === 'opening' || followTaskStatus === 'verifying' || followTaskStatus === 'done'}
+                        className="w-full rounded-2xl bg-white text-black hover:bg-brand-red hover:text-white px-5 py-4 text-sm font-black uppercase tracking-[0.25em] transition-all flex items-center justify-center gap-3"
+                      >
+                        {followTaskStatus === 'opening' || followTaskStatus === 'verifying' ? (
+                          <>
+                            <LoaderCircle className="w-4 h-4 animate-spin" />
+                            {followTaskStatus === 'verifying' ? 'Verifying now' : 'Opening X'}
+                          </>
+                        ) : followTaskStatus === 'done' ? (
+                          'Task Completed'
+                        ) : (
+                          <>
+                            Follow on X
+                            <ExternalLink className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="rounded-[28px] border border-white/10 bg-white/5 p-6">
+                      <div className="flex items-center justify-between gap-4 mb-5">
+                        <div>
+                          <p className="text-[10px] text-white/35 uppercase tracking-[0.35em] font-black mb-2">
+                            Step 2
+                          </p>
+                          <h3 className="text-2xl font-display font-black tracking-tight">
+                            Repost the campaign
+                          </h3>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.25em] border ${
+                          repostTaskDone
+                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                            : 'bg-white/5 text-white/40 border-white/10'
+                        }`}>
+                          {repostTaskDone ? 'Done' : 'Pending'}
+                        </div>
+                      </div>
+                      <p className="text-white/55 text-sm leading-relaxed mb-6">
+                        Repost the SpeakerAI campaign on X, then unlock your allocation below.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openTaskLink(X_REPOST_URL, 'repost')}
+                        disabled={repostTaskStatus === 'opening' || repostTaskStatus === 'verifying' || repostTaskStatus === 'done'}
+                        className="w-full rounded-2xl bg-white/5 border border-white/10 hover:bg-brand-red hover:border-brand-red hover:text-white px-5 py-4 text-sm font-black uppercase tracking-[0.25em] transition-all flex items-center justify-center gap-3"
+                      >
+                        {repostTaskStatus === 'opening' || repostTaskStatus === 'verifying' ? (
+                          <>
+                            <LoaderCircle className="w-4 h-4 animate-spin" />
+                            {repostTaskStatus === 'verifying' ? 'Verifying now' : 'Opening X'}
+                          </>
+                        ) : repostTaskStatus === 'done' ? (
+                          'Task Completed'
+                        ) : (
+                          <>
+                            Repost on X
+                            <ExternalLink className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 rounded-[28px] border border-brand-red/20 bg-brand-red/10 p-6 flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-[10px] text-brand-red-glow uppercase tracking-[0.35em] font-black mb-2">
+                        Unlock Allocation
+                      </p>
+                      <p className="text-white/60 text-sm">
+                        The allocation view appears after both tasks are marked complete.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={unlockAllocation}
+                      disabled={!followTaskDone || !repostTaskDone}
+                      className="rounded-2xl bg-brand-red hover:bg-brand-red-glow disabled:bg-brand-red/30 disabled:text-white/40 px-6 py-4 text-sm font-black uppercase tracking-[0.25em] transition-all"
+                    >
+                      Reveal Allocation
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
             <motion.div
               key="dashboard"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -393,7 +772,7 @@ export default function SpeakerAIDashboard() {
             >
               <div className="glass-card p-8 lg:p-10 rounded-3xl flex flex-col justify-between relative overflow-hidden lg:col-span-2 min-h-[460px]">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(139,0,0,0.22),transparent_38%)]" />
-                {!airdrop.loading && airdrop.isEligible && (
+                {!visibleAirdrop.loading && visibleAirdrop.isEligible && (
                   <div className="absolute top-0 right-0 w-48 h-48 bg-brand-red/20 blur-[90px] -mr-16 -mt-16" />
                 )}
 
@@ -404,16 +783,16 @@ export default function SpeakerAIDashboard() {
                     </div>
                     <div
                       className={`px-4 py-2 text-[10px] font-bold rounded-full border uppercase tracking-[0.25em] ${
-                        !airdrop.loading && airdrop.isEligible
+                        !visibleAirdrop.loading && visibleAirdrop.isEligible
                           ? 'bg-brand-red/10 text-brand-red border-brand-red/20 red-glow'
                           : 'bg-white/5 text-white/40 border-white/10'
                       }`}
                     >
-                      {airdrop.loading ? 'Processing' : airdrop.isEligible ? 'Eligible' : 'Not Eligible'}
+                      {visibleAirdrop.loading ? 'Processing' : visibleAirdrop.isEligible ? 'Eligible' : 'Not Eligible'}
                     </div>
                   </div>
 
-                  {airdrop.loading ? (
+                  {visibleAirdrop.loading ? (
                     <>
                       <p className="text-[10px] text-white/40 uppercase tracking-[0.35em] font-bold mb-4">Allocation</p>
                       <div className="w-20 h-20 rounded-full border border-brand-red/30 bg-brand-red/10 flex items-center justify-center mb-8 red-glow-strong">
@@ -428,12 +807,12 @@ export default function SpeakerAIDashboard() {
                     <>
                       <p className="text-[10px] text-white/40 uppercase tracking-[0.35em] font-bold mb-4">Total Allocation</p>
                       <div className="flex items-baseline gap-3 mb-4">
-                        <span className={`text-7xl lg:text-8xl font-display font-black ${airdrop.isEligible ? 'text-white' : 'text-white/20'}`}>
-                          {airdrop.allocation.toLocaleString()}
+                        <span className={`text-7xl lg:text-8xl font-display font-black ${visibleAirdrop.isEligible ? 'text-white' : 'text-white/20'}`}>
+                          {visibleAirdrop.allocation.toLocaleString()}
                         </span>
                         <span className="text-brand-red font-bold text-xl lg:text-2xl">SPKR</span>
                       </div>
-                      {airdrop.isEligible ? (
+                      {visibleAirdrop.isEligible ? (
                         <p className="text-base text-white/60 max-w-2xl">
                           Your wallet qualified in the snapshot and is eligible for this estimated SPKR allocation.
                         </p>
@@ -465,16 +844,22 @@ export default function SpeakerAIDashboard() {
                 <div className="glass-card p-8 rounded-3xl flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between mb-8">
-                      <div className="p-3 bg-brand-red/20 rounded-2xl">
-                        <ShieldCheck className="text-brand-red w-6 h-6" />
-                      </div>
-                      <div className="px-3 py-1 bg-green-500/10 text-green-500 text-[10px] font-bold rounded-full border border-green-500/20 uppercase tracking-wider">
-                        Wallet Connected
-                      </div>
+                    <div className="p-3 bg-brand-red/20 rounded-2xl">
+                      <ShieldCheck className="text-brand-red w-6 h-6" />
+                    </div>
+                    <div
+                      className={`px-3 py-1 text-[10px] font-bold rounded-full border uppercase tracking-wider ${
+                        isUsingPastedAddress
+                          ? 'bg-brand-red/10 text-brand-red border-brand-red/20'
+                          : 'bg-green-500/10 text-green-500 border border-green-500/20'
+                      }`}
+                    >
+                      {isUsingPastedAddress ? 'Wallet Pasted' : 'Wallet Connected'}
+                    </div>
                     </div>
                     <h3 className="text-white/40 text-xs font-bold uppercase tracking-widest mb-2">Wallet Address</h3>
                     <div className="flex items-center gap-2 mb-6">
-                      <span className="text-2xl font-mono font-bold">{shortenAddress(address!)}</span>
+                      <span className="text-2xl font-mono font-bold">{shortenAddress(selectedAddress)}</span>
                       <button onClick={copyToClipboard} className="p-2 hover:bg-white/5 rounded-lg transition-colors">
                         {copySuccess ? (
                           <CheckCircle2 className="w-4 h-4 text-green-500" />
@@ -483,20 +868,70 @@ export default function SpeakerAIDashboard() {
                         )}
                       </button>
                     </div>
+                    <form onSubmit={submitPastedAddress} className="space-y-3">
+                      <label className="block">
+                        <span className="text-[10px] text-white/40 uppercase tracking-widest font-bold block mb-2">
+                          Paste Another Wallet
+                        </span>
+                        <input
+                          type="text"
+                          value={pastedAddressInput}
+                          onChange={(event) => {
+                            setPastedAddressInput(event.target.value);
+                            if (addressInputError) {
+                              setAddressInputError(null);
+                            }
+                          }}
+                          placeholder="0x..."
+                          className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-white/20 focus:border-brand-red/35"
+                        />
+                      </label>
+                      <div className="flex gap-3">
+                        <button
+                          type="submit"
+                          className="flex-1 rounded-2xl bg-white text-black hover:bg-brand-red hover:text-white px-4 py-3 text-xs font-black uppercase tracking-[0.25em] transition-all"
+                        >
+                          Check
+                        </button>
+                        {isUsingPastedAddress ? (
+                          <button
+                            type="button"
+                            onClick={clearPastedAddress}
+                            className="rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-3 text-xs font-black uppercase tracking-[0.25em] transition-all"
+                          >
+                            Use Connected
+                          </button>
+                        ) : null}
+                      </div>
+                      {addressInputError ? (
+                        <p className="text-xs text-red-300">{addressInputError}</p>
+                      ) : null}
+                    </form>
+
                   </div>
 
                   <div className="space-y-4">
                     <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/5">
-                      <span className="text-sm text-white/60">Network</span>
+                      <span className="text-sm text-white/60">{isUsingPastedAddress ? 'Lookup Mode' : 'Network'}</span>
                       <span className="text-sm font-bold flex items-center gap-2">
                         <div
-                          className={`w-2 h-2 rounded-full ${chainId === BSC_CHAIN_ID ? 'bg-yellow-500 animate-pulse' : 'bg-brand-red'}`}
+                          className={`w-2 h-2 rounded-full ${
+                            isUsingPastedAddress
+                              ? 'bg-brand-red'
+                              : chainId === BSC_CHAIN_ID
+                                ? 'bg-yellow-500 animate-pulse'
+                                : 'bg-brand-red'
+                          }`}
                         />
-                        {chainId === BSC_CHAIN_ID ? 'BNB Smart Chain' : 'Switch to BNB Smart Chain'}
+                        {isUsingPastedAddress
+                          ? 'Manual Address Check'
+                          : chainId === BSC_CHAIN_ID
+                            ? 'BNB Smart Chain'
+                            : 'Switch to BNB Smart Chain'}
                       </span>
                     </div>
                     <a
-                      href={`https://bscscan.com/address/${address}`}
+                      href={`https://bscscan.com/address/${selectedAddress}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex justify-between items-center p-4 hover:bg-white/5 rounded-2xl border border-white/5 transition-colors group"
@@ -514,16 +949,16 @@ export default function SpeakerAIDashboard() {
                         <Zap className="text-brand-red w-6 h-6 fill-current" />
                       </div>
                       <button
-                        onClick={() => address && calculateAllocation(address)}
-                        disabled={airdrop.loading}
+                        onClick={() => selectedAddress && calculateAllocation(selectedAddress)}
+                        disabled={visibleAirdrop.loading}
                         className="p-2 hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50"
                       >
-                        <RefreshCcw className={`w-4 h-4 text-white/40 ${airdrop.loading ? 'animate-spin' : ''}`} />
+                        <RefreshCcw className={`w-4 h-4 text-white/40 ${visibleAirdrop.loading ? 'animate-spin' : ''}`} />
                       </button>
                     </div>
                     <h3 className="text-white/40 text-xs font-bold uppercase tracking-widest mb-2">Snapshot Activity</h3>
                     <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-6xl font-display font-black text-brand-red">{airdrop.loading ? '...' : airdrop.txCount}</span>
+                      <span className="text-6xl font-display font-black text-brand-red">{visibleAirdrop.loading ? '...' : visibleAirdrop.txCount}</span>
                       <span className="text-white/40 font-bold">TXS</span>
                     </div>
                     <p className="text-sm text-white/60">
@@ -539,13 +974,13 @@ export default function SpeakerAIDashboard() {
                     <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
                       <span className="text-white/40">Progress</span>
                       <span className="text-brand-red">
-                        {Math.min(Math.round((airdrop.txCount / MIN_TX_ELIGIBLE) * 100), 100)}%
+                        {Math.min(Math.round((visibleAirdrop.txCount / MIN_TX_ELIGIBLE) * 100), 100)}%
                       </span>
                     </div>
                     <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${Math.min((airdrop.txCount / MIN_TX_ELIGIBLE) * 100, 100)}%` }}
+                        animate={{ width: `${Math.min((visibleAirdrop.txCount / MIN_TX_ELIGIBLE) * 100, 100)}%` }}
                         className="h-full bg-brand-red red-glow"
                       />
                     </div>
@@ -559,6 +994,7 @@ export default function SpeakerAIDashboard() {
                 </div>
               </div>
             </motion.div>
+            )
           ) : (
             <motion.div
               key="empty"
@@ -570,16 +1006,10 @@ export default function SpeakerAIDashboard() {
                 <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center mx-auto mb-8">
                   <Wallet className="text-white/20 w-10 h-10" />
                 </div>
-                <h2 className="text-3xl font-display font-bold mb-4">Connect to see your SPKR Allocation</h2>
+                <h2 className="text-3xl font-display font-bold mb-4">Connect or paste a wallet to see SPKR allocation</h2>
                 <p className="text-white/40 mb-10 max-w-md mx-auto">
-                  Connect your wallet and SpeakerAI will automatically begin calculating your SPKR allocation.
+                  Connect your wallet for one-click lookup, or paste any BNB Smart Chain wallet address to check it manually.
                 </p>
-                <button
-                  onClick={connectWallet}
-                  className="px-12 py-5 bg-white text-black hover:bg-brand-red hover:text-white rounded-full text-lg font-black transition-all flex items-center gap-3 mx-auto"
-                >
-                  CONNECT WALLET
-                </button>
               </div>
             </motion.div>
           )}
@@ -615,6 +1045,7 @@ export default function SpeakerAIDashboard() {
                 <span className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black mb-2">Protocol</span>
                 <Link href="/documentation" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Documentation</Link>
                 <Link href="/allocation" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Allocation</Link>
+                <Link href="/testnet" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Testnet</Link>
                 <a href={SOCIAL_LINKS.website} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Website</a>
               </div>
               <div className="flex flex-col gap-4">
@@ -626,11 +1057,21 @@ export default function SpeakerAIDashboard() {
               <div className="flex flex-col gap-4">
                 <span className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black mb-2">Supply</span>
                 <div className="flex flex-col">
-                  <span className="text-lg font-display font-black text-brand-red-glow leading-none">{AIRDROP_POOL.toLocaleString()}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-display font-black text-brand-red-glow leading-none">{AIRDROP_POOL.toLocaleString()}</span>
+                    <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black tracking-[0.28em] text-white/45 uppercase leading-none">
+                      SPKR
+                    </span>
+                  </div>
                   <span className="text-[9px] text-white/30 font-black tracking-widest mt-1">AIRDROP POOL</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-lg font-display font-black text-white leading-none">{TOTAL_SUPPLY.toLocaleString()}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-display font-black text-white leading-none">{TOTAL_SUPPLY.toLocaleString()}</span>
+                    <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black tracking-[0.28em] text-white/45 uppercase leading-none">
+                      SPKR
+                    </span>
+                  </div>
                   <span className="text-[9px] text-white/30 font-black tracking-widest mt-1">TOTAL SUPPLY</span>
                 </div>
               </div>
@@ -655,7 +1096,7 @@ export default function SpeakerAIDashboard() {
             <XCircle className="text-red-500 w-5 h-5" />
             <span className="text-sm font-medium text-red-200">{airdrop.error}</span>
             <button
-              onClick={() => address && storeAirdrop(address, { ...airdrop, error: null })}
+              onClick={() => selectedAddress && storeAirdrop(selectedAddress, { ...airdrop, error: null })}
               className="ml-4 text-xs font-bold text-white/40 hover:text-white"
             >
               Dismiss
