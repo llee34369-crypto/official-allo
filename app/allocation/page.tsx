@@ -40,7 +40,7 @@ const ALLOCATION_TASK_STORAGE_KEY = 'speakerai-allocation-task-unlock';
 const X_HANDLE = 'SpeakerProtocol';
 const X_FOLLOW_URL = `https://x.com/intent/follow?screen_name=${X_HANDLE}`;
 const X_REPOST_URL =
-  'https://x.com/SpeakerProtocol/status/2048090313433006479?s=20';
+  'https://x.com/intent/retweet?tweet_id=2048090313433006479';
 
 const SOCIAL_LINKS = {
   website: 'https://www.speakerai.org',
