@@ -644,11 +644,11 @@ export default function SpeakerAIDashboard() {
                       </p>
                     </div>
 
-                    <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 min-w-[220px]">
+                    <div className="w-full rounded-3xl border border-white/10 bg-white/5 px-5 py-4 lg:w-auto lg:min-w-[220px]">
                       <span className="text-[10px] text-white/40 uppercase tracking-[0.35em] font-bold block mb-2">
                         Wallet
                       </span>
-                      <span className="text-lg font-mono font-bold text-white">
+                      <span className="block break-all text-base font-mono font-bold text-white sm:text-lg">
                         {shortenAddress(selectedAddress)}
                       </span>
                     </div>
@@ -807,10 +807,10 @@ export default function SpeakerAIDashboard() {
                     <>
                       <p className="text-[10px] text-white/40 uppercase tracking-[0.35em] font-bold mb-4">Total Allocation</p>
                       <div className="flex items-baseline gap-3 mb-4">
-                        <span className={`text-7xl lg:text-8xl font-display font-black ${visibleAirdrop.isEligible ? 'text-white' : 'text-white/20'}`}>
+                        <span className={`text-5xl sm:text-6xl lg:text-8xl font-display font-black ${visibleAirdrop.isEligible ? 'text-white' : 'text-white/20'}`}>
                           {visibleAirdrop.allocation.toLocaleString()}
                         </span>
-                        <span className="text-brand-red font-bold text-xl lg:text-2xl">SPKR</span>
+                        <span className="text-brand-red font-bold text-base sm:text-xl lg:text-2xl">SPKR</span>
                       </div>
                       {visibleAirdrop.isEligible ? (
                         <p className="text-base text-white/60 max-w-2xl">
@@ -858,8 +858,8 @@ export default function SpeakerAIDashboard() {
                     </div>
                     </div>
                     <h3 className="text-white/40 text-xs font-bold uppercase tracking-widest mb-2">Wallet Address</h3>
-                    <div className="flex items-center gap-2 mb-6">
-                      <span className="text-2xl font-mono font-bold">{shortenAddress(selectedAddress)}</span>
+                    <div className="mb-6 flex items-center gap-2">
+                      <span className="min-w-0 break-all text-base font-mono font-bold sm:text-2xl">{shortenAddress(selectedAddress)}</span>
                       <button onClick={copyToClipboard} className="p-2 hover:bg-white/5 rounded-lg transition-colors">
                         {copySuccess ? (
                           <CheckCircle2 className="w-4 h-4 text-green-500" />
@@ -886,7 +886,7 @@ export default function SpeakerAIDashboard() {
                           className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-white/20 focus:border-brand-red/35"
                         />
                       </label>
-                      <div className="flex gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row">
                         <button
                           type="submit"
                           className="flex-1 rounded-2xl bg-white text-black hover:bg-brand-red hover:text-white px-4 py-3 text-xs font-black uppercase tracking-[0.25em] transition-all"
@@ -957,8 +957,8 @@ export default function SpeakerAIDashboard() {
                       </button>
                     </div>
                     <h3 className="text-white/40 text-xs font-bold uppercase tracking-widest mb-2">Snapshot Activity</h3>
-                    <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-6xl font-display font-black text-brand-red">{visibleAirdrop.loading ? '...' : visibleAirdrop.txCount}</span>
+                    <div className="mb-2 flex items-baseline gap-2">
+                      <span className="text-5xl sm:text-6xl font-display font-black text-brand-red">{visibleAirdrop.loading ? '...' : visibleAirdrop.txCount}</span>
                       <span className="text-white/40 font-bold">TXS</span>
                     </div>
                     <p className="text-sm text-white/60">
@@ -1002,11 +1002,11 @@ export default function SpeakerAIDashboard() {
               animate={{ opacity: 1 }}
               className="max-w-4xl mx-auto"
             >
-              <div className="glass-card p-12 rounded-[40px] text-center border-dashed border-white/10">
+              <div className="glass-card rounded-[40px] border-dashed border-white/10 p-8 text-center sm:p-12">
                 <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center mx-auto mb-8">
                   <Wallet className="text-white/20 w-10 h-10" />
                 </div>
-                <h2 className="text-3xl font-display font-bold mb-4">Connect or paste a wallet to see SPKR allocation</h2>
+                <h2 className="mb-4 text-2xl font-display font-bold sm:text-3xl">Connect or paste a wallet to see SPKR allocation</h2>
                 <p className="text-white/40 mb-10 max-w-md mx-auto">
                   Connect your wallet for one-click lookup, or paste any BNB Smart Chain wallet address to check it manually.
                 </p>
@@ -1091,10 +1091,10 @@ export default function SpeakerAIDashboard() {
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-4 bg-red-500/10 border border-red-500/20 backdrop-blur-xl rounded-2xl flex items-center gap-3"
+            className="fixed bottom-4 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 backdrop-blur-xl sm:bottom-8 sm:w-auto sm:px-6 sm:py-4"
           >
             <XCircle className="text-red-500 w-5 h-5" />
-            <span className="text-sm font-medium text-red-200">{airdrop.error}</span>
+            <span className="min-w-0 text-sm font-medium text-red-200">{airdrop.error}</span>
             <button
               onClick={() => selectedAddress && storeAirdrop(selectedAddress, { ...airdrop, error: null })}
               className="ml-4 text-xs font-bold text-white/40 hover:text-white"

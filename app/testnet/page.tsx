@@ -252,6 +252,7 @@ export default function WhitelistPage() {
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
   const speechRecognitionRestartTimeoutRef = useRef<number | null>(null);
   const speechRecognitionStoppingRef = useRef(false);
+  const voiceRecognitionActiveRef = useRef(false);
   const voiceChunksRef = useRef<Blob[]>([]);
   const voiceQuestCancelledRef = useRef(false);
   const originalConnectorStateRef = useRef<{
@@ -379,6 +380,7 @@ export default function WhitelistPage() {
   const stopVoiceCapture = () => {
     voiceQuestCancelledRef.current = true;
     speechRecognitionStoppingRef.current = true;
+    voiceRecognitionActiveRef.current = false;
 
     if (countdownTimeoutRef.current !== null) {
       window.clearTimeout(countdownTimeoutRef.current);
@@ -1157,53 +1159,11 @@ export default function WhitelistPage() {
     setVoiceQuestWarning(null);
     setVoiceQuestTranscript('');
     setVoiceQuestBlob(null);
-    setVoiceQuestMimeType('audio/webm');
-    voiceChunksRef.current = [];
     voiceQuestCancelledRef.current = false;
     speechRecognitionStoppingRef.current = false;
+    voiceRecognitionActiveRef.current = true;
 
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: selectedAudioInputId
-          ? {
-              deviceId: { exact: selectedAudioInputId },
-            }
-          : true,
-      });
-      mediaStreamRef.current = mediaStream;
-
-      const RecorderCtor =
-        MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' })
-          : new MediaRecorder(mediaStream);
-
-      mediaRecorderRef.current = RecorderCtor;
-      setVoiceQuestMimeType(RecorderCtor.mimeType || 'audio/webm');
-
-      RecorderCtor.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          voiceChunksRef.current.push(event.data);
-        }
-      };
-
-      RecorderCtor.onstop = () => {
-        if (voiceQuestCancelledRef.current) {
-          return;
-        }
-
-        setVoiceQuestBlob(
-          voiceChunksRef.current.length
-            ? new Blob(voiceChunksRef.current, {
-                type: RecorderCtor.mimeType || 'audio/webm',
-              })
-            : null
-        );
-        setVoiceQuestStatus('verifying');
-        mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-        mediaStreamRef.current = null;
-        void verifyVoiceQuestRecording();
-      };
-
       const SpeechRecognitionCtor =
         window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -1236,7 +1196,7 @@ export default function WhitelistPage() {
         if (
           speechRecognitionStoppingRef.current ||
           voiceQuestCancelledRef.current ||
-          mediaRecorderRef.current?.state !== 'recording'
+          !voiceRecognitionActiveRef.current
         ) {
           return;
         }
@@ -1259,7 +1219,6 @@ export default function WhitelistPage() {
       }
 
       setVoiceQuestStatus('recording');
-      RecorderCtor.start();
     } catch (error) {
       console.error('Failed to start voice capture:', error);
       stopVoiceCapture();
@@ -1517,6 +1476,7 @@ export default function WhitelistPage() {
 
     voiceQuestCancelledRef.current = false;
     speechRecognitionStoppingRef.current = true;
+    voiceRecognitionActiveRef.current = false;
 
     if (speechRecognitionRestartTimeoutRef.current !== null) {
       window.clearTimeout(speechRecognitionRestartTimeoutRef.current);
@@ -1525,10 +1485,8 @@ export default function WhitelistPage() {
 
     speechRecognitionRef.current?.stop();
     speechRecognitionRef.current = null;
-
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
+    setVoiceQuestStatus('verifying');
+    void verifyVoiceQuestRecording();
   };
 
   const beginVoiceQuestCountdown = async () => {
