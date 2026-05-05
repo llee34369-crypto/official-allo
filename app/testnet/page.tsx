@@ -384,6 +384,7 @@ export default function WhitelistPage() {
   const speechRecognitionRestartTimeoutRef = useRef<number | null>(null);
   const speechRecognitionFinalTranscriptRef = useRef('');
   const speechRecognitionStoppingRef = useRef(false);
+  const voiceQuestAutoStopTriggeredRef = useRef(false);
   const voiceRecognitionActiveRef = useRef(false);
   const voiceChunksRef = useRef<Blob[]>([]);
   const voiceQuestCancelledRef = useRef(false);
@@ -531,6 +532,7 @@ export default function WhitelistPage() {
     speechRecognitionStoppingRef.current = true;
     voiceRecognitionActiveRef.current = false;
     speechRecognitionFinalTranscriptRef.current = '';
+    voiceQuestAutoStopTriggeredRef.current = false;
 
     if (countdownTimeoutRef.current !== null) {
       window.clearTimeout(countdownTimeoutRef.current);
@@ -1337,6 +1339,7 @@ export default function WhitelistPage() {
     setVoiceQuestTranscript('');
     setVoiceQuestBlob(null);
     speechRecognitionFinalTranscriptRef.current = '';
+    voiceQuestAutoStopTriggeredRef.current = false;
     voiceQuestCancelledRef.current = false;
     speechRecognitionStoppingRef.current = false;
     voiceRecognitionActiveRef.current = true;
@@ -1721,6 +1724,20 @@ export default function WhitelistPage() {
     void verifyVoiceQuestRecording(finalTranscript);
   };
 
+  useEffect(() => {
+    if (
+      voiceQuestStatus !== 'recording' ||
+      !normalizedExpectedWords.length ||
+      matchedWordCount !== normalizedExpectedWords.length ||
+      voiceQuestAutoStopTriggeredRef.current
+    ) {
+      return;
+    }
+
+    voiceQuestAutoStopTriggeredRef.current = true;
+    stopVoiceRecording();
+  }, [matchedWordCount, normalizedExpectedWords.length, voiceQuestStatus]);
+
   const beginVoiceQuestCountdown = async () => {
     if (!activeQuestWalletAddress || !hasUnlockedTestnetPage) {
       setVoiceQuestWarning('Sign in with your SPK Wallet first.');
@@ -1739,6 +1756,7 @@ export default function WhitelistPage() {
       setVoiceQuestTranscript('');
       setVoiceQuestBlob(null);
       setVoiceQuestMimeType('audio/webm');
+      voiceQuestAutoStopTriggeredRef.current = false;
       setVoiceQuestStatus('countdown');
       setVoiceQuestCountdown(3);
       voiceChunksRef.current = [];
@@ -2528,32 +2546,23 @@ Earn more points by completing quests and interacting with the protocol.
                         </p>
                       </div>
                       <div className="w-full sm:max-w-[19rem]">
-                        <select
-                          value={voiceQuestLanguageCode}
-                          onChange={(event) => setVoiceQuestLanguageCode(event.target.value)}
-                          className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm font-semibold text-white outline-none transition-all focus:border-[#ff8f8f]/60"
-                        >
-                          {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value} className="bg-[#120404]">
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {VOICE_QUEST_LANGUAGE_OPTIONS.slice(0, 6).map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              onClick={() => setVoiceQuestLanguageCode(option.value)}
-                              className={`rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] transition-all ${
-                                voiceQuestLanguageCode === option.value
-                                  ? 'border-[#ff8f8f]/50 bg-[#4a0a0a] text-[#ffd0d0]'
-                                  : 'border-white/10 bg-white/[0.03] text-white/45 hover:bg-white/[0.08] hover:text-white/75'
-                              }`}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
+                        <div className="rounded-2xl border border-white/10 bg-black/50 p-2">
+                          <select
+                            value={voiceQuestLanguageCode}
+                            onChange={(event) => setVoiceQuestLanguageCode(event.target.value)}
+                            size={Math.min(8, VOICE_QUEST_LANGUAGE_OPTIONS.length)}
+                            className="h-[15.5rem] w-full appearance-none rounded-xl bg-transparent px-2 py-1 text-sm font-semibold text-white outline-none"
+                          >
+                            {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => (
+                              <option
+                                key={option.value}
+                                value={option.value}
+                                className="rounded-lg bg-[#120404] px-3 py-2 text-white"
+                              >
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </div>
