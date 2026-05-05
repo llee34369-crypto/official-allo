@@ -585,6 +585,34 @@ export default function WhitelistPage() {
     voiceChunksRef.current = [];
   };
 
+  const resetVoiceQuestForNextAttempt = async () => {
+    if (!activeQuestWalletAddress || !hasUnlockedTestnetPage) {
+      closeVoiceQuestModal();
+      return;
+    }
+
+    try {
+      const nextSession = await fetchVoiceQuestSession(activeQuestWalletAddress);
+      setVoiceQuestWarning(null);
+      setVoiceQuestTranscript('');
+      setVoiceQuestBlob(null);
+      setVoiceQuestMimeType('audio/webm');
+      setVoiceQuestCountdown(null);
+      setVoiceQuestClaimToken(null);
+      setPendingDesktopVoiceQuestRequestId(null);
+      voiceChunksRef.current = [];
+
+      if ((nextSession.remainingToday ?? 0) > 0) {
+        setVoiceQuestStatus('legal');
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to refresh voice quest after success:', error);
+    }
+
+    closeVoiceQuestModal();
+  };
+
   const fetchVoiceQuestSession = async (
     walletAddress: string,
     signal?: AbortSignal,
@@ -1675,9 +1703,10 @@ export default function WhitelistPage() {
           return;
         }
 
+        setPendingDesktopVoiceQuestRequestId(null);
         setVoiceQuestStatus('success');
         autoCloseTimeoutRef.current = window.setTimeout(() => {
-          closeVoiceQuestModal();
+          void resetVoiceQuestForNextAttempt();
         }, 1400);
       } catch (error) {
         console.error('Failed to check desktop voice quest completion:', error);
@@ -1958,9 +1987,10 @@ export default function WhitelistPage() {
           ? payload.remainingToday
           : voiceQuestRemainingToday
       );
+      setPendingDesktopVoiceQuestRequestId(null);
       setVoiceQuestStatus('success');
       autoCloseTimeoutRef.current = window.setTimeout(() => {
-        closeVoiceQuestModal();
+        void resetVoiceQuestForNextAttempt();
       }, 1400);
     } catch (error) {
       const message =

@@ -20,7 +20,7 @@ function cleanupPending() {
   const now = Date.now();
 
   for (const [walletAddress, entry] of pendingByWallet.entries()) {
-    if (entry.claimedAt || now - entry.createdAt > TTL_MS) {
+    if (now - entry.createdAt > TTL_MS) {
       pendingByWallet.delete(walletAddress);
     }
   }
