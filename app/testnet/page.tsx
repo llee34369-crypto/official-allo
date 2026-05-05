@@ -1339,74 +1339,9 @@ export default function WhitelistPage() {
     voiceRecognitionActiveRef.current = true;
 
     try {
-      let stream: MediaStream;
-
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: selectedAudioInputId
-            ? {
-                deviceId: { exact: selectedAudioInputId },
-                autoGainControl: true,
-                echoCancellation: true,
-                noiseSuppression: true,
-              }
-            : {
-                autoGainControl: true,
-                echoCancellation: true,
-                noiseSuppression: true,
-              },
-        });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            autoGainControl: true,
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
-        });
-      }
-
-      mediaStreamRef.current = stream;
+      mediaStreamRef.current = null;
+      mediaRecorderRef.current = null;
       voiceChunksRef.current = [];
-
-      if (typeof MediaRecorder !== 'undefined') {
-        const preferredMimeTypes = [
-          'audio/webm;codecs=opus',
-          'audio/webm',
-          'audio/mp4',
-        ];
-        const supportedMimeType = preferredMimeTypes.find((mimeType) =>
-          typeof MediaRecorder.isTypeSupported === 'function'
-            ? MediaRecorder.isTypeSupported(mimeType)
-            : mimeType === 'audio/webm'
-        );
-        const mediaRecorder = supportedMimeType
-          ? new MediaRecorder(stream, { mimeType: supportedMimeType })
-          : new MediaRecorder(stream);
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            voiceChunksRef.current.push(event.data);
-          }
-        };
-        mediaRecorder.onstop = () => {
-          if (!voiceChunksRef.current.length) {
-            return;
-          }
-
-          const blobType =
-            mediaRecorder.mimeType || supportedMimeType || 'audio/webm';
-          setVoiceQuestMimeType(blobType);
-          setVoiceQuestBlob(
-            new Blob(voiceChunksRef.current, {
-              type: blobType,
-            })
-          );
-        };
-        mediaRecorder.start(250);
-        mediaRecorderRef.current = mediaRecorder;
-        setVoiceQuestMimeType(mediaRecorder.mimeType || supportedMimeType || 'audio/webm');
-      }
 
       const SpeechRecognitionCtor =
         window.SpeechRecognition || window.webkitSpeechRecognition;
