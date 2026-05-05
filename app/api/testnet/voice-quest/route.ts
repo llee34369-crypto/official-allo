@@ -33,6 +33,7 @@ interface VerifyVoiceQuestPayload {
   walletAddress?: unknown;
   transcript?: unknown;
   sentenceToken?: unknown;
+  languageCode?: unknown;
   legalAccepted?: unknown;
 }
 
@@ -85,11 +86,12 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const walletAddress = validateWalletAddress(searchParams.get('address'));
+    const languageCode = searchParams.get('language');
     const status = await getDailyVoiceQuestStatus(
       walletAddress,
       DAILY_VOICE_RECORD_QUEST_DAILY_LIMIT
     );
-    const sentence = createVoiceQuestSentence(walletAddress);
+    const sentence = createVoiceQuestSentence(walletAddress, languageCode ?? undefined);
 
     return NextResponse.json({
       ok: true,
@@ -98,6 +100,7 @@ export async function GET(request: Request) {
       dailyLimit: status.dailyLimit,
       rewardPoints: DAILY_VOICE_RECORD_QUEST_REWARD_POINTS,
       expectedText: sentence.expectedText,
+      languageCode: sentence.languageCode,
       sentenceToken: sentence.sentenceToken,
     });
   } catch (error) {
@@ -153,6 +156,8 @@ export async function POST(request: Request) {
         typeof payload.transcript === 'string' ? payload.transcript.trim() : '';
       const sentenceToken =
         typeof payload.sentenceToken === 'string' ? payload.sentenceToken.trim() : '';
+      const requestedLanguageCode =
+        typeof payload.languageCode === 'string' ? payload.languageCode.trim() : '';
       const legalAccepted = payload.legalAccepted === true;
 
       if (!legalAccepted) {
@@ -204,7 +209,8 @@ export async function POST(request: Request) {
       const claimToken = createVoiceQuestClaimToken(
         walletAddress,
         sentencePayload.expectedText,
-        transcript
+        transcript,
+        sentencePayload.languageCode || requestedLanguageCode
       );
 
       return NextResponse.json({
@@ -212,6 +218,7 @@ export async function POST(request: Request) {
         status: 'verified',
         claimToken,
         expectedText: sentencePayload.expectedText,
+        languageCode: sentencePayload.languageCode,
       });
     }
 

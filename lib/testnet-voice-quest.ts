@@ -1,184 +1,151 @@
 import 'server-only';
 
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 interface SignedVoiceQuestTokenPayload {
   type: 'voice_sentence' | 'voice_claim';
   walletAddress: string;
   expectedText: string;
   transcriptText?: string;
+  languageCode: string;
   exp: number;
 }
 
-const OPENINGS = [
-  'SpeakerAI helps',
-  'The SpeakerAI protocol lets',
-  'This voice quest helps',
-  'Our secure testnet lets',
-  'The voice check lets',
-  'This daily challenge helps',
-  'SpeakerAI testnet lets',
-  'The recording quest helps',
-  'The red prompt lets',
-  'This wallet check helps',
-  'The daily recorder lets',
-  'This protocol test helps',
-  'Our voice screen lets',
-  'The guided reading flow helps',
-  'This reward prompt lets',
-  'The secure mic check helps',
-  'This random phrase test lets',
-  'The highlight screen helps',
-  'This SpeakerAI flow lets',
-  'The phrase verifier helps',
-  'This mobile voice test lets',
-  'The browser reading quest helps',
-  'This testnet prompt lets',
-  'The secure speech flow helps',
-  'The onchain voice flow helps',
-  'This crypto AI quest lets',
-  'The wallet agent prompt helps',
-  'This token voice check lets',
-  'The AI reader flow helps',
-  'This model driven quest lets',
-  'The blockchain speech check helps',
-  'This smart wallet prompt lets',
-  'The tokenized voice test helps',
-  'This AI protocol flow lets',
-  'The crypto recorder prompt helps',
-  'This onchain reading quest lets',
-];
-
-const SUBJECTS = [
-  'wallet users',
-  'community members',
-  'testnet participants',
-  'voice explorers',
-  'active listeners',
-  'protocol users',
-  'daily testers',
-  'SPK wallet users',
-  'mobile users',
-  'browser participants',
-  'quest runners',
-  'recording users',
-  'voice readers',
-  'reward hunters',
-  'testnet explorers',
-  'mic users',
-  'daily claimers',
-  'dashboard users',
-  'protocol testers',
-  'sentence readers',
-  'prompt followers',
-  'wallet signers',
-  'voice claimers',
-  'reading participants',
-  'token holders',
-  'onchain builders',
-  'AI users',
-  'protocol agents',
-  'model testers',
-  'wallet operators',
-  'crypto participants',
-  'blockchain readers',
-  'token claimers',
-  'agent users',
-  'smart contract testers',
-  'AI explorers',
-  'chain users',
-  'airdrop hunters',
-  'prompt runners',
-  'wallet delegates',
-];
-
-const ACTIONS = [
-  'verify clear speech',
-  'record short voice samples',
-  'confirm microphone activity',
-  'prove spoken accuracy',
-  'read random phrases',
-  'match prompted words',
-  'complete secure voice checks',
-  'finish guided recordings',
-  'track red highlighted words',
-  'follow random reading prompts',
-  'complete wallet voice tasks',
-  'confirm spoken word matches',
-  'pass daily recording checks',
-  'read generated phrase sets',
-  'complete quick mic prompts',
-  'verify recorded word order',
-  'finish short wallet checks',
-  'repeat random word groups',
-  'clear the daily voice task',
-  'match highlighted reading cues',
-  'complete timed recording steps',
-  'follow the black screen prompt',
-  'read fast shifting phrases',
-  'confirm random spoken patterns',
-  'verify token wallet ownership',
-  'read AI generated prompts',
-  'confirm onchain voice checks',
-  'match crypto wallet phrases',
-  'complete smart agent tasks',
-  'repeat blockchain prompt sets',
-  'verify model generated lines',
-  'follow token reward prompts',
-  'clear AI voice checkpoints',
-  'read random onchain phrases',
-  'confirm wallet signer prompts',
-  'match protocol reward phrases',
-  'finish token claim recordings',
-  'complete crypto reading rounds',
-  'verify AI protocol prompts',
-  'repeat secure chain phrases',
-];
-
-const ENDINGS = [
-  'with private wallet confirmation.',
-  'through smooth onchain access.',
-  'inside the SpeakerAI testnet.',
-  'before claiming daily SP points.',
-  'during fast red highlight prompts.',
-  'with secure voice reward verification.',
-  'inside the black reading screen.',
-  'through the daily reward flow.',
-  'with one clean mobile tap.',
-  'before the signature request opens.',
-  'inside the guided wallet flow.',
-  'without leaving the testnet page.',
-  'with a fast verify step first.',
-  'during the random phrase challenge.',
-  'across the speaker protocol dashboard.',
-  'with live prompt highlighting.',
-  'before claiming the next reward.',
-  'during the five time daily limit.',
-  'inside the voice reward tracker.',
-  'through the secure browser session.',
-  'while the wallet stays connected.',
-  'inside the mobile recording sheet.',
-  'after the countdown completes.',
-  'before the claim window closes.',
-  'while the AI agent stays ready.',
-  'before the token reward updates.',
-  'inside the crypto voice flow.',
-  'through the secure wallet session.',
-  'while the onchain prompt updates.',
-  'before the blockchain claim step.',
-  'inside the AI reward process.',
-  'through the token verification round.',
-  'while the smart wallet stays active.',
-  'before the protocol points settle.',
-  'inside the chain synced dashboard.',
-  'through the AI powered quest flow.',
-  'before the wallet signature returns.',
-  'while the testnet reward stays live.',
-  'inside the tokenized voice check.',
-  'through the crypto agent prompt.',
-];
-
 const TOKEN_DURATION_MS = 15 * 60 * 1000;
+const DEFAULT_LANGUAGE_CODE = 'en-US';
+
+const SAFE_VOICE_QUEST_SENTENCES: Record<string, string[]> = {
+  ar: [
+    'يساعد سبيكر اي المستخدمين على قراءة جملة واضحة للتحقق من التسجيل اليومي.',
+    'يمنح اختبار الصوت اليومي المشاركين طريقة بسيطة لتأكيد الكلمات المنطوقة بدقة.',
+    'تجعل رحلة الصوت في سبيكر اي قراءة الجملة المطلوبة سهلة وآمنة.',
+  ],
+  bn: [
+    'স্পিকারএআই ব্যবহারকারীদের পরিষ্কারভাবে বাক্য পড়ে দৈনিক ভয়েস চেক সম্পন্ন করতে সাহায্য করে।',
+    'এই ভয়েস কুয়েস্ট অংশগ্রহণকারীদের সঠিক শব্দ পড়ে যাচাই করতে দেয়।',
+    'নিরাপদ রেকর্ডিং ধাপটি স্পষ্ট উচ্চারণ দিয়ে প্রতিদিনের টাস্ক শেষ করতে সাহায্য করে।',
+  ],
+  de: [
+    'SpeakerAI hilft Nutzern, einen klaren Satz zu lesen und die taegliche Sprachpruefung zu bestehen.',
+    'Diese Sprachaufgabe laesst Teilnehmer einen sicheren Testsatz deutlich vorlesen.',
+    'Der taegliche Aufnahmetest bestaetigt gesprochene Woerter mit einer kurzen klaren Lesung.',
+  ],
+  en: [
+    'SpeakerAI helps users read a clear sentence for the daily voice check.',
+    'This daily voice quest lets participants verify spoken words with a short safe phrase.',
+    'The SpeakerAI recording test confirms clear speech with an easy guided sentence.',
+  ],
+  es: [
+    'SpeakerAI ayuda a los usuarios a leer una frase clara para la verificacion diaria de voz.',
+    'Esta prueba de voz permite a los participantes confirmar palabras habladas con una frase segura.',
+    'El reto diario de grabacion verifica una lectura clara con una oracion sencilla.',
+  ],
+  fil: [
+    'Tinutulungan ng SpeakerAI ang mga user na bumasa ng malinaw na pangungusap para sa daily voice check.',
+    'Ang voice quest na ito ay para maberipika ang malinaw na pagbasa ng ligtas na prompt.',
+    'Pinapadali ng recording test ng SpeakerAI ang tamang pagbasa ng maikling pangungusap.',
+  ],
+  fr: [
+    'SpeakerAI aide les utilisateurs a lire une phrase claire pour la verification vocale quotidienne.',
+    'Cette quete vocale permet aux participants de confirmer des mots prononces avec une phrase simple.',
+    'Le test audio quotidien verifie une lecture nette avec une consigne sure.',
+  ],
+  hi: [
+    'स्पीकरएआई उपयोगकर्ताओं को दैनिक वॉइस जांच के लिए एक स्पष्ट वाक्य पढ़ने में मदद करता है।',
+    'यह वॉइस क्वेस्ट प्रतिभागियों को सुरक्षित पंक्ति बोलकर शब्दों की पुष्टि करने देता है।',
+    'दैनिक रिकॉर्डिंग परीक्षण साफ उच्चारण के साथ सरल वाक्य की जांच करता है।',
+  ],
+  id: [
+    'SpeakerAI membantu pengguna membaca kalimat jelas untuk pemeriksaan suara harian.',
+    'Tugas suara ini membuat peserta memverifikasi kata yang diucapkan dengan frasa aman.',
+    'Tes rekaman harian memeriksa ucapan yang jelas dengan kalimat panduan singkat.',
+  ],
+  it: [
+    'SpeakerAI aiuta gli utenti a leggere una frase chiara per la verifica vocale giornaliera.',
+    'Questa prova vocale consente ai partecipanti di confermare parole pronunciate con una frase sicura.',
+    'Il test di registrazione quotidiano verifica una lettura chiara con una frase semplice.',
+  ],
+  ja: [
+    'SpeakerAIは毎日の音声確認のために分かりやすい文を読めるようにします。',
+    'この音声クエストでは安全な文章を読み上げて話した言葉を確認します。',
+    '毎日の録音テストは短く明確な文章で発話を検証します。',
+  ],
+  ko: [
+    'SpeakerAI는 일일 음성 확인을 위해 명확한 문장을 읽도록 도와줍니다.',
+    '이 음성 퀘스트는 안전한 문장을 읽어 말한 단어를 확인합니다.',
+    '매일 녹음 테스트는 짧고 분명한 문장으로 발화를 검증합니다.',
+  ],
+  ms: [
+    'SpeakerAI membantu pengguna membaca ayat yang jelas untuk semakan suara harian.',
+    'Tugasan suara ini membolehkan peserta mengesahkan perkataan yang disebut dengan frasa selamat.',
+    'Ujian rakaman harian menyemak bacaan yang jelas dengan ayat panduan ringkas.',
+  ],
+  nl: [
+    'SpeakerAI helpt gebruikers een duidelijke zin te lezen voor de dagelijkse stemcontrole.',
+    'Deze stemopdracht laat deelnemers gesproken woorden bevestigen met een korte veilige zin.',
+    'De dagelijkse opnametest controleert duidelijke spraak met een eenvoudige begeleide zin.',
+  ],
+  pl: [
+    'SpeakerAI pomaga uzytkownikom przeczytac jasne zdanie do codziennej weryfikacji glosu.',
+    'To zadanie glosowe pozwala uczestnikom potwierdzic wypowiedziane slowa bezpieczna fraza.',
+    'Codzienny test nagrania sprawdza wyrazna mowe przy pomocy prostego zdania.',
+  ],
+  pt: [
+    'SpeakerAI ajuda os usuarios a ler uma frase clara para a verificacao diaria de voz.',
+    'Este desafio de voz permite aos participantes confirmar palavras faladas com uma frase segura.',
+    'O teste diario de gravacao verifica uma leitura clara com uma frase simples.',
+  ],
+  ru: [
+    'SpeakerAI помогает пользователям читать понятную фразу для ежедневной проверки голоса.',
+    'Это голосовое задание позволяет участникам подтвердить произнесенные слова безопасной фразой.',
+    'Ежедневный тест записи проверяет четкую речь с помощью простой подсказки.',
+  ],
+  sv: [
+    'SpeakerAI hjaelper anvandare att lasa en tydlig mening for den dagliga rostkontrollen.',
+    'Denna rostuppgift later deltagare bekrafta talade ord med en kort saker fras.',
+    'Det dagliga inspelningstestet verifierar tydligt tal med en enkel mening.',
+  ],
+  sw: [
+    'SpeakerAI husaidia watumiaji kusoma sentensi wazi kwa ukaguzi wa sauti wa kila siku.',
+    'Jaribio hili la sauti huruhusu washiriki kuthibitisha maneno yaliyosemwa kwa sentensi salama.',
+    'Mtihani wa kurekodi kila siku hukagua matamshi wazi kwa sentensi fupi rahisi.',
+  ],
+  ta: [
+    'SpeakerAI பயனர்களுக்கு தினசரி குரல் சரிபார்ப்புக்கு தெளிவான வாக்கியத்தை வாசிக்க உதவுகிறது.',
+    'இந்த குரல் பணியில் பாதுகாப்பான வரியை வாசித்து சொன்ன வார்த்தைகளை சரிபார்க்கலாம்.',
+    'தினசரி பதிவு சோதனை எளிய வாக்கியத்தின் மூலம் தெளிவான உச்சரிப்பை சரிபார்க்கிறது.',
+  ],
+  th: [
+    'SpeakerAI ช่วยให้ผู้ใช้อ่านประโยคที่ชัดเจนสำหรับการตรวจสอบเสียงประจำวัน',
+    'ภารกิจเสียงนี้ให้ผู้เข้าร่วมยืนยันคำพูดด้วยประโยคที่ปลอดภัยและอ่านง่าย',
+    'การทดสอบบันทึกเสียงรายวันตรวจสอบการพูดที่ชัดเจนด้วยประโยคสั้น ๆ',
+  ],
+  tr: [
+    'SpeakerAI kullanicilarin gunluk ses kontrolu icin acik bir cumle okumasina yardimci olur.',
+    'Bu ses gorevi katilimcilarin kisa ve guvenli bir ifade ile konusulan kelimeleri dogrulamasini saglar.',
+    'Gunluk kayit testi acik konusmayi basit bir yonlendirme cumlesi ile kontrol eder.',
+  ],
+  uk: [
+    'SpeakerAI допомагає користувачам читати зрозуміле речення для щоденної перевірки голосу.',
+    'Це голосове завдання дозволяє учасникам підтвердити сказані слова безпечною фразою.',
+    'Щоденний тест запису перевіряє чітке мовлення за допомогою простої підказки.',
+  ],
+  ur: [
+    'اسپیکر اے آئی صارفین کو روزانہ وائس چیک کے لیے واضح جملہ پڑھنے میں مدد دیتا ہے۔',
+    'یہ وائس کویسٹ شرکا کو محفوظ جملہ پڑھ کر بولے گئے الفاظ کی تصدیق کرنے دیتا ہے۔',
+    'روزانہ ریکارڈنگ ٹیسٹ سادہ جملے کے ساتھ واضح ادائیگی کی جانچ کرتا ہے۔',
+  ],
+  vi: [
+    'SpeakerAI giup nguoi dung doc mot cau ro rang cho viec kiem tra giong noi hang ngay.',
+    'Nhiem vu giong noi nay cho phep nguoi tham gia xac minh tu da noi bang mot cau an toan.',
+    'Bai kiem tra ghi am hang ngay xac minh cach doc ro rang bang mot cau don gian.',
+  ],
+  zh: [
+    'SpeakerAI帮助用户朗读清晰句子完成每日语音验证。',
+    '这个语音任务让参与者用安全短句确认朗读内容。',
+    '每日录音测试通过简短明确的句子验证发音。',
+  ],
+};
 
 const normalizeWallet = (value: string) => value.trim().toLowerCase();
 
@@ -200,10 +167,41 @@ function getVoiceQuestSecret() {
 
 function normalizeText(value: string) {
   return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeLanguageCode(value: string | null | undefined) {
+  const fallback = DEFAULT_LANGUAGE_CODE;
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+
+  if (!trimmed) {
+    return fallback;
+  }
+
+  const sanitized = trimmed.replace(/[^a-zA-Z0-9-]/g, '');
+  return sanitized || fallback;
+}
+
+function resolveVoiceQuestLanguage(languageCode: string | null | undefined) {
+  const normalizedLanguageCode = normalizeLanguageCode(languageCode);
+  const baseLanguage = normalizedLanguageCode.split('-')[0]?.toLowerCase() || 'en';
+
+  if (SAFE_VOICE_QUEST_SENTENCES[baseLanguage]) {
+    return {
+      languageCode: normalizedLanguageCode,
+      sentences: SAFE_VOICE_QUEST_SENTENCES[baseLanguage],
+    };
+  }
+
+  return {
+    languageCode: DEFAULT_LANGUAGE_CODE,
+    sentences: SAFE_VOICE_QUEST_SENTENCES.en,
+  };
 }
 
 function encodeTokenPart(value: string) {
@@ -223,7 +221,10 @@ function signTokenPayload(payload: SignedVoiceQuestTokenPayload) {
   return `${payloadPart}.${signature}`;
 }
 
-function verifySignedToken(token: string, expectedType: SignedVoiceQuestTokenPayload['type']) {
+function verifySignedToken(
+  token: string,
+  expectedType: SignedVoiceQuestTokenPayload['type']
+) {
   const [payloadPart, signaturePart] = token.split('.');
 
   if (!payloadPart || !signaturePart) {
@@ -257,31 +258,26 @@ function verifySignedToken(token: string, expectedType: SignedVoiceQuestTokenPay
   return payload;
 }
 
-export function createVoiceQuestSentence(walletAddress: string) {
+export function createVoiceQuestSentence(
+  walletAddress: string,
+  requestedLanguageCode?: string
+) {
   const normalizedWalletAddress = normalizeWallet(walletAddress);
-  const seed = createHash('sha256')
-    .update(`${normalizedWalletAddress}:${new Date().toISOString()}:${Math.random()}`)
-    .digest();
-
-  const pick = (values: string[], index: number) =>
-    values[seed[index] % values.length];
-
-  const expectedText = [
-    pick(OPENINGS, 0),
-    pick(SUBJECTS, 1),
-    pick(ACTIONS, 2),
-    pick(ENDINGS, 3),
-  ].join(' ');
+  const { languageCode, sentences } = resolveVoiceQuestLanguage(requestedLanguageCode);
+  const randomIndex = Math.floor(Math.random() * sentences.length);
+  const expectedText = sentences[randomIndex];
 
   const payload: SignedVoiceQuestTokenPayload = {
     type: 'voice_sentence',
     walletAddress: normalizedWalletAddress,
     expectedText,
+    languageCode,
     exp: Date.now() + TOKEN_DURATION_MS,
   };
 
   return {
     expectedText,
+    languageCode,
     sentenceToken: signTokenPayload(payload),
   };
 }
@@ -300,13 +296,15 @@ export function verifyVoiceQuestSentenceToken(token: string, walletAddress: stri
 export function createVoiceQuestClaimToken(
   walletAddress: string,
   expectedText: string,
-  transcriptText: string
+  transcriptText: string,
+  languageCode: string
 ) {
   const payload: SignedVoiceQuestTokenPayload = {
     type: 'voice_claim',
     walletAddress: normalizeWallet(walletAddress),
     expectedText: expectedText.trim(),
     transcriptText: transcriptText.trim(),
+    languageCode: normalizeLanguageCode(languageCode),
     exp: Date.now() + TOKEN_DURATION_MS,
   };
 

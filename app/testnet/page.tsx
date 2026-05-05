@@ -91,6 +91,7 @@ interface VoiceQuestStatusResponse {
   dailyLimit?: number;
   rewardPoints?: number;
   expectedText?: string;
+  languageCode?: string;
   sentenceToken?: string;
 }
 
@@ -100,6 +101,7 @@ interface VoiceQuestVerifyResponse {
   status?: string;
   claimToken?: string;
   expectedText?: string;
+  languageCode?: string;
 }
 
 interface VoiceQuestClaimResponse {
@@ -135,6 +137,7 @@ interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
+  maxAlternatives?: number;
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
   onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
@@ -185,10 +188,80 @@ function DiscordLogo(props: SVGProps<SVGSVGElement>) {
 const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US').format(value);
 const normalizeWalletAddress = (value: string) => value.trim().toLowerCase();
+const DEFAULT_VOICE_QUEST_LANGUAGE_CODE = 'en-US';
+const CUSTOM_VOICE_QUEST_LANGUAGE_CODE = 'custom';
+const VOICE_QUEST_LANGUAGE_OPTIONS = [
+  { value: 'en-US', label: 'English (US)' },
+  { value: 'en-GB', label: 'English (UK)' },
+  { value: 'es-ES', label: 'Spanish' },
+  { value: 'fr-FR', label: 'French' },
+  { value: 'de-DE', label: 'German' },
+  { value: 'pt-BR', label: 'Portuguese' },
+  { value: 'it-IT', label: 'Italian' },
+  { value: 'nl-NL', label: 'Dutch' },
+  { value: 'pl-PL', label: 'Polish' },
+  { value: 'tr-TR', label: 'Turkish' },
+  { value: 'ru-RU', label: 'Russian' },
+  { value: 'uk-UA', label: 'Ukrainian' },
+  { value: 'ar-SA', label: 'Arabic' },
+  { value: 'hi-IN', label: 'Hindi' },
+  { value: 'bn-BD', label: 'Bengali' },
+  { value: 'ur-PK', label: 'Urdu' },
+  { value: 'ta-IN', label: 'Tamil' },
+  { value: 'id-ID', label: 'Indonesian' },
+  { value: 'ms-MY', label: 'Malay' },
+  { value: 'vi-VN', label: 'Vietnamese' },
+  { value: 'th-TH', label: 'Thai' },
+  { value: 'fil-PH', label: 'Filipino' },
+  { value: 'sw-KE', label: 'Swahili' },
+  { value: 'ko-KR', label: 'Korean' },
+  { value: 'ja-JP', label: 'Japanese' },
+  { value: 'zh-CN', label: 'Chinese Simplified' },
+  { value: 'zh-TW', label: 'Chinese Traditional' },
+  { value: CUSTOM_VOICE_QUEST_LANGUAGE_CODE, label: 'Custom locale code' },
+] as const;
 const getWalletSessionStorageKey = (walletAddress: string) =>
   `speakerai:testnet-session:${normalizeWalletAddress(walletAddress)}`;
 const normalizeSpeechText = (value: string) =>
-  value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  value
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+const segmentSpeechText = (value: string, languageCode: string) => {
+  const normalized = normalizeSpeechText(value);
+
+  if (!normalized) {
+    return [];
+  }
+
+  const IntlWithSegmenter = Intl as typeof Intl & {
+    Segmenter?: new (
+      locales?: string | string[],
+      options?: { granularity?: 'grapheme' | 'word' | 'sentence' }
+    ) => {
+      segment(input: string): Iterable<{ segment: string; isWordLike?: boolean }>;
+    };
+  };
+
+  if (IntlWithSegmenter.Segmenter) {
+    const segmenter = new IntlWithSegmenter.Segmenter(languageCode, {
+      granularity: 'word',
+    });
+    const segmentedWords = Array.from(segmenter.segment(normalized))
+      .filter((part) => part.isWordLike !== false)
+      .map((part) => part.segment.trim())
+      .filter(Boolean);
+
+    if (segmentedWords.length) {
+      return segmentedWords;
+    }
+  }
+
+  return normalized.split(' ').filter(Boolean);
+};
 
 const getMatchedWordCount = (expectedWords: string[], spokenWords: string[]) => {
   let count = 0;
@@ -251,6 +324,7 @@ export default function WhitelistPage() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
   const speechRecognitionRestartTimeoutRef = useRef<number | null>(null);
+  const speechRecognitionFinalTranscriptRef = useRef('');
   const speechRecognitionStoppingRef = useRef(false);
   const voiceRecognitionActiveRef = useRef(false);
   const voiceChunksRef = useRef<Blob[]>([]);
@@ -296,6 +370,13 @@ export default function WhitelistPage() {
   const [voiceQuestBlob, setVoiceQuestBlob] = useState<Blob | null>(null);
   const [voiceQuestMimeType, setVoiceQuestMimeType] = useState('audio/webm');
   const [voiceQuestExpectedText, setVoiceQuestExpectedText] = useState('');
+  const [voiceQuestLanguageCode, setVoiceQuestLanguageCode] = useState(
+    DEFAULT_VOICE_QUEST_LANGUAGE_CODE
+  );
+  const [voiceQuestCustomLanguageCode, setVoiceQuestCustomLanguageCode] = useState('');
+  const [voiceQuestResolvedLanguageCode, setVoiceQuestResolvedLanguageCode] = useState(
+    DEFAULT_VOICE_QUEST_LANGUAGE_CODE
+  );
   const [voiceQuestSentenceToken, setVoiceQuestSentenceToken] = useState<string | null>(null);
   const [voiceQuestClaimToken, setVoiceQuestClaimToken] = useState<string | null>(null);
   const [voiceQuestCompletedToday, setVoiceQuestCompletedToday] = useState(0);
@@ -365,11 +446,15 @@ export default function WhitelistPage() {
       )}`
     : '';
   const normalizedExpectedWords = normalizeSpeechText(voiceQuestExpectedText)
-    .split(' ')
-    .filter(Boolean);
+    ? segmentSpeechText(voiceQuestExpectedText, voiceQuestResolvedLanguageCode)
+    : [];
   const normalizedTranscriptWords = normalizeSpeechText(voiceQuestTranscript)
-    .split(' ')
-    .filter(Boolean);
+    ? segmentSpeechText(voiceQuestTranscript, voiceQuestResolvedLanguageCode)
+    : [];
+  const requestedVoiceQuestLanguageCode =
+    voiceQuestLanguageCode === CUSTOM_VOICE_QUEST_LANGUAGE_CODE
+      ? voiceQuestCustomLanguageCode.trim() || DEFAULT_VOICE_QUEST_LANGUAGE_CODE
+      : voiceQuestLanguageCode;
   const matchedWordCount = getMatchedWordCount(
     normalizedExpectedWords,
     normalizedTranscriptWords
@@ -381,6 +466,7 @@ export default function WhitelistPage() {
     voiceQuestCancelledRef.current = true;
     speechRecognitionStoppingRef.current = true;
     voiceRecognitionActiveRef.current = false;
+    speechRecognitionFinalTranscriptRef.current = '';
 
     if (countdownTimeoutRef.current !== null) {
       window.clearTimeout(countdownTimeoutRef.current);
@@ -421,6 +507,7 @@ export default function WhitelistPage() {
     setVoiceQuestBlob(null);
     setVoiceQuestMimeType('audio/webm');
     setVoiceQuestExpectedText('');
+    setVoiceQuestResolvedLanguageCode(requestedVoiceQuestLanguageCode);
     setVoiceQuestSentenceToken(null);
     setVoiceQuestClaimToken(null);
     setPendingDesktopVoiceQuestRequestId(null);
@@ -429,10 +516,15 @@ export default function WhitelistPage() {
 
   const fetchVoiceQuestSession = async (
     walletAddress: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    languageCode = requestedVoiceQuestLanguageCode
   ) => {
+    const searchParams = new URLSearchParams({
+      address: walletAddress,
+      language: languageCode,
+    });
     const response = await fetch(
-      `/api/testnet/voice-quest?address=${encodeURIComponent(walletAddress)}`,
+      `/api/testnet/voice-quest?${searchParams.toString()}`,
       {
         method: 'GET',
         cache: 'no-store',
@@ -455,6 +547,9 @@ export default function WhitelistPage() {
         : DAILY_VOICE_RECORD_QUEST_DAILY_LIMIT
     );
     setVoiceQuestExpectedText(payload.expectedText?.trim() || '');
+    setVoiceQuestResolvedLanguageCode(
+      payload.languageCode?.trim() || languageCode || DEFAULT_VOICE_QUEST_LANGUAGE_CODE
+    );
     setVoiceQuestSentenceToken(payload.sentenceToken?.trim() || null);
 
     return payload;
@@ -791,7 +886,11 @@ export default function WhitelistPage() {
 
     const abortController = new AbortController();
 
-    void fetchVoiceQuestSession(activeQuestWalletAddress, abortController.signal).catch((error) => {
+    void fetchVoiceQuestSession(
+      activeQuestWalletAddress,
+      abortController.signal,
+      requestedVoiceQuestLanguageCode
+    ).catch((error) => {
       if (!abortController.signal.aborted) {
         console.error('Failed to load voice quest status:', error);
       }
@@ -800,7 +899,7 @@ export default function WhitelistPage() {
     return () => {
       abortController.abort();
     };
-  }, [activeQuestWalletAddress, walletVerifiedForSession]);
+  }, [activeQuestWalletAddress, requestedVoiceQuestLanguageCode, walletVerifiedForSession]);
 
   useEffect(() => {
     if (!(address && canClaimSpkWalletQuest) || walletVerifiedForSession) {
@@ -931,6 +1030,7 @@ export default function WhitelistPage() {
     if (voiceQuestOpen && address) {
       mobileUrl.searchParams.set('voiceQuest', '1');
       mobileUrl.searchParams.set('wallet', normalizeWalletAddress(address));
+      mobileUrl.searchParams.set('lang', requestedVoiceQuestLanguageCode);
 
       if (walletVerifiedForSession && walletSessionToken) {
         mobileUrl.searchParams.set('session', walletSessionToken);
@@ -938,7 +1038,13 @@ export default function WhitelistPage() {
     }
 
     setMobileOpenUrl(mobileUrl.toString());
-  }, [address, voiceQuestOpen, walletSessionToken, walletVerifiedForSession]);
+  }, [
+    address,
+    requestedVoiceQuestLanguageCode,
+    voiceQuestOpen,
+    walletSessionToken,
+    walletVerifiedForSession,
+  ]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -949,9 +1055,24 @@ export default function WhitelistPage() {
     const wantsVoiceQuest = searchParams.get('voiceQuest') === '1';
     const walletFromUrl = searchParams.get('wallet')?.trim() ?? '';
     const sessionFromUrl = searchParams.get('session')?.trim() ?? '';
+    const languageFromUrl = searchParams.get('lang')?.trim() ?? '';
 
     if (!wantsVoiceQuest) {
       return;
+    }
+
+    if (languageFromUrl) {
+      const hasPresetLanguage = VOICE_QUEST_LANGUAGE_OPTIONS.some(
+        (option) => option.value === languageFromUrl
+      );
+
+      if (hasPresetLanguage) {
+        setVoiceQuestLanguageCode(languageFromUrl);
+        setVoiceQuestCustomLanguageCode('');
+      } else {
+        setVoiceQuestLanguageCode(CUSTOM_VOICE_QUEST_LANGUAGE_CODE);
+        setVoiceQuestCustomLanguageCode(languageFromUrl);
+      }
     }
 
     setMobileVoiceQuestRequested(true);
@@ -1159,11 +1280,68 @@ export default function WhitelistPage() {
     setVoiceQuestWarning(null);
     setVoiceQuestTranscript('');
     setVoiceQuestBlob(null);
+    speechRecognitionFinalTranscriptRef.current = '';
     voiceQuestCancelledRef.current = false;
     speechRecognitionStoppingRef.current = false;
     voiceRecognitionActiveRef.current = true;
 
     try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: selectedAudioInputId
+          ? {
+              deviceId: { exact: selectedAudioInputId },
+              autoGainControl: true,
+              echoCancellation: true,
+              noiseSuppression: true,
+            }
+          : {
+              autoGainControl: true,
+              echoCancellation: true,
+              noiseSuppression: true,
+            },
+      });
+      mediaStreamRef.current = stream;
+      voiceChunksRef.current = [];
+
+      if (typeof MediaRecorder !== 'undefined') {
+        const preferredMimeTypes = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/mp4',
+        ];
+        const supportedMimeType = preferredMimeTypes.find((mimeType) =>
+          typeof MediaRecorder.isTypeSupported === 'function'
+            ? MediaRecorder.isTypeSupported(mimeType)
+            : mimeType === 'audio/webm'
+        );
+        const mediaRecorder = supportedMimeType
+          ? new MediaRecorder(stream, { mimeType: supportedMimeType })
+          : new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            voiceChunksRef.current.push(event.data);
+          }
+        };
+        mediaRecorder.onstop = () => {
+          if (!voiceChunksRef.current.length) {
+            return;
+          }
+
+          const blobType =
+            mediaRecorder.mimeType || supportedMimeType || 'audio/webm';
+          setVoiceQuestMimeType(blobType);
+          setVoiceQuestBlob(
+            new Blob(voiceChunksRef.current, {
+              type: blobType,
+            })
+          );
+        };
+        mediaRecorder.start(250);
+        mediaRecorderRef.current = mediaRecorder;
+        setVoiceQuestMimeType(mediaRecorder.mimeType || supportedMimeType || 'audio/webm');
+      }
+
       const SpeechRecognitionCtor =
         window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -1175,15 +1353,29 @@ export default function WhitelistPage() {
       speechRecognitionRef.current = recognition;
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
+      recognition.lang = voiceQuestResolvedLanguageCode || requestedVoiceQuestLanguageCode;
       recognition.onresult = (event) => {
-        const nextTranscript = Array.from({ length: event.results.length }, (_, index) =>
-          event.results[index]?.[0]?.transcript ?? ''
-        )
-          .join(' ')
-          .trim();
+        let finalTranscript = speechRecognitionFinalTranscriptRef.current;
+        let interimTranscript = '';
 
-        setVoiceQuestTranscript(nextTranscript);
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          const transcriptPart = result?.[0]?.transcript?.trim() ?? '';
+
+          if (!transcriptPart) {
+            continue;
+          }
+
+          if (result.isFinal) {
+            finalTranscript = `${finalTranscript} ${transcriptPart}`.trim();
+          } else {
+            interimTranscript = `${interimTranscript} ${transcriptPart}`.trim();
+          }
+        }
+
+        speechRecognitionFinalTranscriptRef.current = finalTranscript;
+        setVoiceQuestTranscript(`${finalTranscript} ${interimTranscript}`.trim());
       };
       recognition.onerror = (event) => {
         if (event.error === 'aborted' || event.error === 'no-speech') {
@@ -1254,6 +1446,7 @@ export default function WhitelistPage() {
     setVoiceQuestLegalAccepted(false);
     setVoiceQuestCountdown(null);
     setVoiceQuestExpectedText('');
+    setVoiceQuestResolvedLanguageCode(requestedVoiceQuestLanguageCode);
     setVoiceQuestSentenceToken(null);
     setVoiceQuestClaimToken(null);
     voiceChunksRef.current = [];
@@ -1474,6 +1667,9 @@ export default function WhitelistPage() {
       return;
     }
 
+    const finalTranscript =
+      speechRecognitionFinalTranscriptRef.current.trim() || voiceQuestTranscript.trim();
+
     voiceQuestCancelledRef.current = false;
     speechRecognitionStoppingRef.current = true;
     voiceRecognitionActiveRef.current = false;
@@ -1485,8 +1681,12 @@ export default function WhitelistPage() {
 
     speechRecognitionRef.current?.stop();
     speechRecognitionRef.current = null;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setVoiceQuestTranscript(finalTranscript);
     setVoiceQuestStatus('verifying');
-    void verifyVoiceQuestRecording();
+    void verifyVoiceQuestRecording(finalTranscript);
   };
 
   const beginVoiceQuestCountdown = async () => {
@@ -1534,7 +1734,7 @@ export default function WhitelistPage() {
     }
   };
 
-  const verifyVoiceQuestRecording = async () => {
+  const verifyVoiceQuestRecording = async (transcriptOverride?: string) => {
     if (!activeQuestWalletAddress || !hasUnlockedTestnetPage) {
       setVoiceQuestWarning('Sign in with your SPK Wallet first.');
       setVoiceQuestStatus('legal');
@@ -1557,6 +1757,12 @@ export default function WhitelistPage() {
     setVoiceQuestWarning(null);
 
     try {
+      const transcriptToVerify = transcriptOverride?.trim() || voiceQuestTranscript.trim();
+
+      if (!transcriptToVerify) {
+        throw new Error('No speech was captured. Please try again.');
+      }
+
       const response = await fetch('/api/testnet/voice-quest', {
         method: 'POST',
         headers: {
@@ -1565,8 +1771,9 @@ export default function WhitelistPage() {
         body: JSON.stringify({
           action: 'verify',
           walletAddress: activeQuestWalletAddress,
-          transcript: voiceQuestTranscript,
+          transcript: transcriptToVerify,
           sentenceToken: voiceQuestSentenceToken,
+          languageCode: voiceQuestResolvedLanguageCode,
           legalAccepted: voiceQuestLegalAccepted,
         }),
       });
@@ -1581,6 +1788,9 @@ export default function WhitelistPage() {
 
       setVoiceQuestClaimToken(payload.claimToken?.trim() || null);
       setVoiceQuestExpectedText(payload.expectedText?.trim() || voiceQuestExpectedText);
+      setVoiceQuestResolvedLanguageCode(
+        payload.languageCode?.trim() || voiceQuestResolvedLanguageCode
+      );
 
       if (shouldSignVoiceQuestOnDesktop && mobileWalletSessionToken) {
         const desktopSignResponse = await fetch('/api/testnet/voice-quest-desktop-sign', {
@@ -2275,6 +2485,34 @@ Earn more points by completing quests and interacting with the protocol.
                             and agree to submit my recorded voice.
                           </span>
                   </label>
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <label className="block text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                      Reading Language
+                    </label>
+                    <select
+                      value={voiceQuestLanguageCode}
+                      onChange={(event) => setVoiceQuestLanguageCode(event.target.value)}
+                      className="mt-3 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition-all focus:border-[#ff8f8f]/60"
+                    >
+                      {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value} className="bg-[#120404]">
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    {voiceQuestLanguageCode === CUSTOM_VOICE_QUEST_LANGUAGE_CODE ? (
+                      <input
+                        type="text"
+                        value={voiceQuestCustomLanguageCode}
+                        onChange={(event) => setVoiceQuestCustomLanguageCode(event.target.value)}
+                        placeholder="Enter locale code like en-AU or es-MX"
+                        className="mt-3 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-[#ff8f8f]/60"
+                      />
+                    ) : null}
+                    <p className="mt-3 text-xs leading-relaxed text-white/45">
+                      The prompt and live detector will use this language setting.
+                    </p>
+                  </div>
                   {!isMobileViewport && audioInputDevices.length > 1 ? (
                     <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                       <label className="block text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
@@ -2415,7 +2653,9 @@ Earn more points by completing quests and interacting with the protocol.
                                 Detector Hears
                               </span>
                               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/50">
-                                {voiceQuestStatus === 'recording' ? 'Live' : 'Preview'}
+                                {voiceQuestStatus === 'recording'
+                                  ? `Live • ${voiceQuestResolvedLanguageCode}`
+                                  : `Preview • ${voiceQuestResolvedLanguageCode}`}
                               </span>
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
