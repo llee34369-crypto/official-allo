@@ -530,6 +530,7 @@ export default function WhitelistPage() {
   );
   const hasPerfectTranscript =
     normalizeSpeechText(voiceQuestTranscript) === normalizeSpeechText(voiceQuestExpectedText);
+  const shouldUseNativeVoiceLanguageSelector = isMobileViewport;
 
   const stopVoiceCapture = () => {
     voiceQuestCancelledRef.current = true;
@@ -2580,78 +2581,106 @@ Earn more points by completing quests and interacting with the protocol.
                           Choose the language for the prompt and the live speech detector.
                         </p>
                       </div>
-                      <div className="relative w-full sm:max-w-[19rem]">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setVoiceQuestLanguageMenuOpen((currentValue) => !currentValue)
-                          }
-                          className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-4 py-3 text-left transition-all hover:border-[#ff8f8f]/30 hover:bg-white/[0.08]"
-                        >
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
+                      <div className="relative min-w-0 w-full sm:max-w-[19rem]">
+                        {shouldUseNativeVoiceLanguageSelector ? (
+                          <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-4 py-3">
+                            <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
                               Selected
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-white">
-                              {selectedVoiceQuestLanguage.label}
-                            </p>
-                          </div>
-                          <ChevronRight
-                            className={`h-4 w-4 text-white/50 transition-transform duration-200 ${
-                              voiceQuestLanguageMenuOpen ? 'rotate-90' : ''
-                            }`}
-                          />
-                        </button>
-
-                        {voiceQuestLanguageMenuOpen ? (
-                          <div className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-20 overflow-hidden rounded-[20px] border border-[#6a1b1b]/50 bg-[linear-gradient(180deg,rgba(27,7,7,0.98),rgba(12,5,5,0.98))] shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:rounded-[20px]">
-                            <div className="border-b border-white/10 px-4 py-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div>
-                                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
-                                    Available Languages
-                                  </p>
-                                  <p className="mt-1 text-xs text-white/45 sm:hidden">
-                                    Choose one option and continue the quest.
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setVoiceQuestLanguageMenuOpen(false)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/55"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                            <div className="max-h-[18rem] overflow-y-auto p-2 sm:max-h-64">
-                              {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => {
-                                const isSelected = option.value === voiceQuestLanguageCode;
-
-                                return (
-                                  <button
+                            </label>
+                            <div className="relative mt-2">
+                              <select
+                                value={voiceQuestLanguageCode}
+                                onChange={(event) => setVoiceQuestLanguageCode(event.target.value)}
+                                className="w-full appearance-none rounded-xl border border-white/10 bg-black/35 px-3 py-3 pr-11 text-sm font-semibold leading-tight text-white outline-none transition-all focus:border-[#ff8f8f]/60"
+                              >
+                                {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => (
+                                  <option
                                     key={option.value}
-                                    type="button"
-                                    onClick={() => {
-                                      setVoiceQuestLanguageCode(option.value);
-                                      setVoiceQuestLanguageMenuOpen(false);
-                                    }}
-                                    className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition-all ${
-                                      isSelected
-                                        ? 'bg-[#4a0a0a] text-white'
-                                        : 'text-white/72 hover:bg-white/[0.06] hover:text-white'
-                                    }`}
+                                    value={option.value}
+                                    className="bg-[#120404]"
                                   >
-                                    <span className="font-semibold">{option.label}</span>
-                                    {isSelected ? (
-                                      <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-                                    ) : null}
-                                  </button>
-                                );
-                              })}
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <ChevronRight className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-white/55" />
                             </div>
                           </div>
-                        ) : null}
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVoiceQuestLanguageMenuOpen((currentValue) => !currentValue)
+                              }
+                              className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-4 py-3 text-left transition-all hover:border-[#ff8f8f]/30 hover:bg-white/[0.08]"
+                            >
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
+                                  Selected
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-white">
+                                  {selectedVoiceQuestLanguage.label}
+                                </p>
+                              </div>
+                              <ChevronRight
+                                className={`h-4 w-4 text-white/50 transition-transform duration-200 ${
+                                  voiceQuestLanguageMenuOpen ? 'rotate-90' : ''
+                                }`}
+                              />
+                            </button>
+
+                            {voiceQuestLanguageMenuOpen ? (
+                              <div className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-20 overflow-hidden rounded-[20px] border border-[#6a1b1b]/50 bg-[linear-gradient(180deg,rgba(27,7,7,0.98),rgba(12,5,5,0.98))] shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:rounded-[20px]">
+                                <div className="border-b border-white/10 px-4 py-3">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
+                                        Available Languages
+                                      </p>
+                                      <p className="mt-1 text-xs text-white/45 sm:hidden">
+                                        Choose one option and continue the quest.
+                                      </p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setVoiceQuestLanguageMenuOpen(false)}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/55"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="max-h-[18rem] overflow-y-auto p-2 sm:max-h-64">
+                                  {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => {
+                                    const isSelected = option.value === voiceQuestLanguageCode;
+
+                                    return (
+                                      <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => {
+                                          setVoiceQuestLanguageCode(option.value);
+                                          setVoiceQuestLanguageMenuOpen(false);
+                                        }}
+                                        className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition-all ${
+                                          isSelected
+                                            ? 'bg-[#4a0a0a] text-white'
+                                            : 'text-white/72 hover:bg-white/[0.06] hover:text-white'
+                                        }`}
+                                      >
+                                        <span className="font-semibold">{option.label}</span>
+                                        {isSelected ? (
+                                          <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                                        ) : null}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : null}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2790,8 +2819,15 @@ Earn more points by completing quests and interacting with the protocol.
                               );
 
                                 return (
-                                  <span
+                                  <motion.span
                                     key={`${word}-${index}`}
+                                    initial={{ opacity: 0, y: 14 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{
+                                      duration: 0.48,
+                                      ease: [0.22, 1, 0.36, 1],
+                                      delay: Math.min(index * 0.04, 0.5),
+                                    }}
                                     className={`inline rounded-lg px-1 py-0.5 transition-all duration-300 sm:rounded-xl sm:px-2 sm:py-1 ${
                                       progressState === 'matched'
                                         ? 'bg-emerald-500 text-white shadow-[0_0_30px_rgba(16,185,129,0.35)]'
@@ -2804,7 +2840,7 @@ Earn more points by completing quests and interacting with the protocol.
                                     {index < words.length - 1 && expectedTextUsesWhitespace
                                       ? ' '
                                       : ''}
-                                  </span>
+                                  </motion.span>
                                 );
                               })}
                             </p>

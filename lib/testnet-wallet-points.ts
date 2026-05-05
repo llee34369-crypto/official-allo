@@ -72,6 +72,11 @@ const DEFAULT_ADD_POINTS_RPC = 'add_wallet_points';
 const DEFAULT_CLAIM_QUEST_REWARD_RPC = 'claim_testnet_quest_reward';
 const DEFAULT_VOICE_RECORDINGS_TABLE = 'testnet_voice_recordings';
 const DEFAULT_CLAIM_DAILY_VOICE_REWARD_RPC = 'claim_testnet_daily_voice_reward';
+const DEFAULT_VOICE_RECORDINGS_TIMESTAMP_COLUMNS = [
+  'claimed_at',
+  'created_at',
+  'recorded_at',
+] as const;
 const MISSING_CONFIG_ERROR =
   'Missing TESTNET_POINTS_SUPABASE_URL or TESTNET_POINTS_SUPABASE_SERVICE_ROLE_KEY in the environment.';
 
@@ -140,6 +145,21 @@ function getTestnetWalletPointsConfig() {
       'TESTNET_CLAIM_DAILY_VOICE_REWARD_RPC'
     ),
   };
+}
+
+function getVoiceQuestTimestampColumns() {
+  const configuredColumns = process.env.TESTNET_VOICE_RECORDINGS_TIMESTAMP_COLUMNS
+    ?.split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const values = configuredColumns?.length
+    ? [...configuredColumns, ...DEFAULT_VOICE_RECORDINGS_TIMESTAMP_COLUMNS]
+    : [...DEFAULT_VOICE_RECORDINGS_TIMESTAMP_COLUMNS];
+
+  return values.filter(
+    (value, index, array) => IDENTIFIER_PATTERN.test(value) && array.indexOf(value) === index
+  );
 }
 
 async function testnetWalletPointsFetch(path: string, init: RequestInit = {}) {
@@ -279,6 +299,44 @@ function getUtcDateRange() {
   };
 }
 
+async function getVoiceQuestStatusCountForColumn(
+  walletAddress: string,
+  voiceRecordingsTable: string,
+  timestampColumn: string,
+  startIso: string,
+  endIso: string
+) {
+  try {
+    const response = await testnetWalletPointsFetch(
+      `/rest/v1/${voiceRecordingsTable}?select=id&wallet_address=eq.${encodeURIComponent(
+        walletAddress
+      )}&${timestampColumn}=gte.${encodeURIComponent(startIso)}&${timestampColumn}=lt.${encodeURIComponent(
+        endIso
+      )}`,
+      {
+        method: 'GET',
+        headers: {
+          Prefer: 'count=exact',
+        },
+      }
+    );
+
+    const rows = (await response.json()) as VoiceQuestStatusRow[];
+    return rows.length;
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    const missingColumn =
+      message.includes(`column ${timestampColumn.toLowerCase()}`) &&
+      message.includes('does not exist');
+
+    if (missingColumn) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 export async function getDailyVoiceQuestStatus(
   walletAddress: string,
   dailyLimit: number
@@ -287,22 +345,26 @@ export async function getDailyVoiceQuestStatus(
   const normalizedDailyLimit = Math.max(0, Math.trunc(dailyLimit));
   const { voiceRecordingsTable } = getTestnetWalletPointsConfig();
   const { startIso, endIso } = getUtcDateRange();
-  const response = await testnetWalletPointsFetch(
-    `/rest/v1/${voiceRecordingsTable}?select=id&wallet_address=eq.${encodeURIComponent(
-      normalizedWalletAddress
-    )}&claimed_at=gte.${encodeURIComponent(startIso)}&claimed_at=lt.${encodeURIComponent(
-      endIso
-    )}`,
-    {
-      method: 'GET',
-      headers: {
-        Prefer: 'count=exact',
-      },
-    }
-  );
+  const timestampColumns = getVoiceQuestTimestampColumns();
+  let completedToday = 0;
 
-  const rows = (await response.json()) as VoiceQuestStatusRow[];
-  const completedToday = rows.length;
+  for (const timestampColumn of timestampColumns) {
+    const count = await getVoiceQuestStatusCountForColumn(
+      normalizedWalletAddress,
+      voiceRecordingsTable,
+      timestampColumn,
+      startIso,
+      endIso
+    );
+
+    if (typeof count === 'number') {
+      completedToday = Math.max(completedToday, count);
+    }
+
+    if (completedToday >= normalizedDailyLimit) {
+      break;
+    }
+  }
 
   return {
     completedToday,
