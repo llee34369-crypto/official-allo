@@ -217,6 +217,7 @@ export default function WhitelistPage() {
   const spkWalletQuestPoints = DOWNLOAD_SPK_WALLET_QUEST_REWARD_POINTS;
   const voiceQuestPoints = DAILY_VOICE_RECORD_QUEST_REWARD_POINTS;
   const autoClaimAttemptedRef = useRef<string | null>(null);
+  const connectedQuestWalletRef = useRef<string | null>(null);
   const countdownTimeoutRef = useRef<number | null>(null);
   const autoCloseTimeoutRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -301,6 +302,12 @@ export default function WhitelistPage() {
   const activeQuestWalletAddress =
     (address && canClaimSpkWalletQuest ? address : mobileSessionWalletAddress) || '';
   const hasUnlockedTestnetPage = Boolean(activeQuestWalletAddress && walletVerifiedForSession);
+  const hasSessionBackedMobileFlow = Boolean(
+    mobileVoiceQuestRequested &&
+      mobileSessionWalletAddress &&
+      mobileWalletSessionToken &&
+      walletVerifiedForSession
+  );
   const normalizedConnectedAddress = address ? normalizeWalletAddress(address) : '';
   const normalizedMobileVoiceQuestWallet = mobileVoiceQuestWallet
     ? normalizeWalletAddress(mobileVoiceQuestWallet)
@@ -484,12 +491,9 @@ export default function WhitelistPage() {
 
   useEffect(() => {
     if (!(isConnected && address && isConnectedWithSpkWallet)) {
-      if (
-        mobileVoiceQuestRequested &&
-        mobileSessionWalletAddress &&
-        mobileWalletSessionToken &&
-        walletVerifiedForSession
-      ) {
+      connectedQuestWalletRef.current = null;
+
+      if (hasSessionBackedMobileFlow) {
         return;
       }
 
@@ -510,6 +514,18 @@ export default function WhitelistPage() {
 
     const abortController = new AbortController();
     const normalizedAddress = address.toLowerCase();
+    const isNewConnectedWallet = connectedQuestWalletRef.current !== normalizedAddress;
+
+    if (isNewConnectedWallet) {
+      connectedQuestWalletRef.current = normalizedAddress;
+      setDownloadSpkWalletQuestClaimed(false);
+      setWalletVerifiedForSession(false);
+      setWalletSessionToken(null);
+      setQuestClaimStatus('idle');
+      setQuestClaimWarning(null);
+      autoClaimAttemptedRef.current = null;
+    }
+
     let shouldReconnect = true;
     let reconnectTimeoutId: number | null = null;
     let heartbeatIntervalId: number | null = null;
@@ -671,9 +687,6 @@ export default function WhitelistPage() {
         setWalletPoints(
           typeof walletPointsPayload?.points === 'number' ? walletPointsPayload.points : 0
         );
-        setDownloadSpkWalletQuestClaimed(false);
-        setWalletVerifiedForSession(false);
-        setQuestClaimStatus('idle');
 
         if (
           realtimeConfigResponse.ok &&
@@ -710,12 +723,12 @@ export default function WhitelistPage() {
     };
   }, [
     address,
+    hasSessionBackedMobileFlow,
     isConnected,
     isConnectedWithSpkWallet,
     mobileSessionWalletAddress,
     mobileVoiceQuestRequested,
     mobileWalletSessionToken,
-    walletVerifiedForSession,
   ]);
 
   useEffect(() => {
