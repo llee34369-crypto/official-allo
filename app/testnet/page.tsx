@@ -190,7 +190,6 @@ const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US').format(value);
 const normalizeWalletAddress = (value: string) => value.trim().toLowerCase();
 const DEFAULT_VOICE_QUEST_LANGUAGE_CODE = 'en-US';
-const CUSTOM_VOICE_QUEST_LANGUAGE_CODE = 'custom';
 const VOICE_QUEST_LANGUAGE_OPTIONS = [
   { value: 'en-US', label: 'English (US)' },
   { value: 'en-GB', label: 'English (UK)' },
@@ -219,10 +218,11 @@ const VOICE_QUEST_LANGUAGE_OPTIONS = [
   { value: 'ja-JP', label: 'Japanese' },
   { value: 'zh-CN', label: 'Chinese Simplified' },
   { value: 'zh-TW', label: 'Chinese Traditional' },
-  { value: CUSTOM_VOICE_QUEST_LANGUAGE_CODE, label: 'Custom locale code' },
 ] as const;
 const getWalletSessionStorageKey = (walletAddress: string) =>
   `speakerai:testnet-session:${normalizeWalletAddress(walletAddress)}`;
+const isSupportedVoiceQuestLanguage = (value: string) =>
+  VOICE_QUEST_LANGUAGE_OPTIONS.some((option) => option.value === value);
 const getSpeechRecognitionLanguageFallbacks = (preferredLanguageCode: string) => {
   const normalizedPreferredLanguageCode = preferredLanguageCode.trim();
   const browserLanguage =
@@ -312,14 +312,24 @@ const segmentDisplayText = (value: string, languageCode: string) => {
 };
 
 const getMatchedWordCount = (expectedWords: string[], spokenWords: string[]) => {
+  if (!expectedWords.length || !spokenWords.length) {
+    return 0;
+  }
+
   let count = 0;
 
-  while (count < expectedWords.length && count < spokenWords.length) {
-    if (expectedWords[count] !== spokenWords[count]) {
-      break;
+  for (const spokenWord of spokenWords) {
+    if (spokenWord === expectedWords[count]) {
+      count += 1;
+
+      if (count >= expectedWords.length) {
+        return expectedWords.length;
+      }
+
+      continue;
     }
 
-    count += 1;
+    count = spokenWord === expectedWords[0] ? 1 : 0;
   }
 
   return count;
@@ -421,7 +431,6 @@ export default function WhitelistPage() {
   const [voiceQuestLanguageCode, setVoiceQuestLanguageCode] = useState(
     DEFAULT_VOICE_QUEST_LANGUAGE_CODE
   );
-  const [voiceQuestCustomLanguageCode, setVoiceQuestCustomLanguageCode] = useState('');
   const [voiceQuestResolvedLanguageCode, setVoiceQuestResolvedLanguageCode] = useState(
     DEFAULT_VOICE_QUEST_LANGUAGE_CODE
   );
@@ -504,13 +513,15 @@ export default function WhitelistPage() {
     voiceQuestResolvedLanguageCode
   );
   const expectedTextUsesWhitespace = /\s/u.test(voiceQuestExpectedText);
-  const requestedVoiceQuestLanguageCode =
-    voiceQuestLanguageCode === CUSTOM_VOICE_QUEST_LANGUAGE_CODE
-      ? voiceQuestCustomLanguageCode.trim() || DEFAULT_VOICE_QUEST_LANGUAGE_CODE
-      : voiceQuestLanguageCode;
+  const requestedVoiceQuestLanguageCode = voiceQuestLanguageCode;
   const matchedWordCount = getMatchedWordCount(
     normalizedExpectedWords,
     normalizedTranscriptWords
+  );
+  const visibleTranscriptWords = normalizedTranscriptWords.slice(-12);
+  const visibleTranscriptWordStartIndex = Math.max(
+    0,
+    normalizedTranscriptWords.length - visibleTranscriptWords.length
   );
   const hasPerfectTranscript =
     normalizeSpeechText(voiceQuestTranscript) === normalizeSpeechText(voiceQuestExpectedText);
@@ -1115,16 +1126,8 @@ export default function WhitelistPage() {
     }
 
     if (languageFromUrl) {
-      const hasPresetLanguage = VOICE_QUEST_LANGUAGE_OPTIONS.some(
-        (option) => option.value === languageFromUrl
-      );
-
-      if (hasPresetLanguage) {
+      if (isSupportedVoiceQuestLanguage(languageFromUrl)) {
         setVoiceQuestLanguageCode(languageFromUrl);
-        setVoiceQuestCustomLanguageCode('');
-      } else {
-        setVoiceQuestLanguageCode(CUSTOM_VOICE_QUEST_LANGUAGE_CODE);
-        setVoiceQuestCustomLanguageCode(languageFromUrl);
       }
     }
 
@@ -2515,32 +2518,45 @@ Earn more points by completing quests and interacting with the protocol.
                           </span>
                   </label>
                   <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <label className="block text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                      Reading Language
-                    </label>
-                    <select
-                      value={voiceQuestLanguageCode}
-                      onChange={(event) => setVoiceQuestLanguageCode(event.target.value)}
-                      className="mt-3 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition-all focus:border-[#ff8f8f]/60"
-                    >
-                      {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value} className="bg-[#120404]">
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    {voiceQuestLanguageCode === CUSTOM_VOICE_QUEST_LANGUAGE_CODE ? (
-                      <input
-                        type="text"
-                        value={voiceQuestCustomLanguageCode}
-                        onChange={(event) => setVoiceQuestCustomLanguageCode(event.target.value)}
-                        placeholder="Enter locale code like en-AU or es-MX"
-                        className="mt-3 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-[#ff8f8f]/60"
-                      />
-                    ) : null}
-                    <p className="mt-3 text-xs leading-relaxed text-white/45">
-                      The prompt and live detector will use this language setting.
-                    </p>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="sm:max-w-[14rem]">
+                        <label className="block text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                          Reading Language
+                        </label>
+                        <p className="mt-2 text-xs leading-relaxed text-white/45">
+                          Choose the language for the prompt and the live speech detector.
+                        </p>
+                      </div>
+                      <div className="w-full sm:max-w-[19rem]">
+                        <select
+                          value={voiceQuestLanguageCode}
+                          onChange={(event) => setVoiceQuestLanguageCode(event.target.value)}
+                          className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm font-semibold text-white outline-none transition-all focus:border-[#ff8f8f]/60"
+                        >
+                          {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value} className="bg-[#120404]">
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {VOICE_QUEST_LANGUAGE_OPTIONS.slice(0, 6).map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setVoiceQuestLanguageCode(option.value)}
+                              className={`rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] transition-all ${
+                                voiceQuestLanguageCode === option.value
+                                  ? 'border-[#ff8f8f]/50 bg-[#4a0a0a] text-[#ffd0d0]'
+                                  : 'border-white/10 bg-white/[0.03] text-white/45 hover:bg-white/[0.08] hover:text-white/75'
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   {!isMobileViewport && audioInputDevices.length > 1 ? (
                     <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -2709,18 +2725,25 @@ Earn more points by completing quests and interacting with the protocol.
                                     : `Preview • ${voiceQuestResolvedLanguageCode}`}
                                 </span>
                               </div>
-                              <div className="mt-3 flex min-h-[68px] flex-wrap gap-2">
-                                {(normalizedTranscriptWords.length
-                                  ? normalizedTranscriptWords
+                              <div className="mt-3 max-h-[112px] overflow-y-auto pr-1">
+                                <div className="flex min-h-[68px] flex-wrap gap-2">
+                                  {(visibleTranscriptWords.length
+                                  ? visibleTranscriptWords
                                   : ['Waiting for speech...']
-                                ).map((word, index) => {
-                                  const isPlaceholder = !normalizedTranscriptWords.length;
+                                  ).map((word, index) => {
+                                  const isPlaceholder = !visibleTranscriptWords.length;
+                                  const absoluteIndex =
+                                    visibleTranscriptWordStartIndex + index;
                                   const isCorrect =
                                     !isPlaceholder &&
-                                    index < matchedWordCount &&
-                                    normalizedExpectedWords[index] === word;
+                                    absoluteIndex < matchedWordCount &&
+                                    normalizedExpectedWords[absoluteIndex] === word;
                                   const isCurrent =
-                                    !isPlaceholder && index === matchedWordCount;
+                                    !isPlaceholder && absoluteIndex === matchedWordCount;
+                                  const isAfterReset =
+                                    !isPlaceholder &&
+                                    absoluteIndex > matchedWordCount &&
+                                    matchedWordCount === 0;
 
                                   return (
                                     <span
@@ -2732,6 +2755,8 @@ Earn more points by completing quests and interacting with the protocol.
                                             ? 'border border-emerald-400/30 bg-emerald-500/15 text-emerald-300'
                                             : isCurrent
                                               ? 'border border-[#ff8f8f]/30 bg-[#3a0d0d] text-[#ffd5d5]'
+                                              : isAfterReset
+                                                ? 'border border-[#6a1b1b]/40 bg-[#1f0909] text-[#b78383]'
                                               : 'border border-white/10 bg-white/[0.04] text-white/55'
                                       }`}
                                     >
@@ -2739,7 +2764,11 @@ Earn more points by completing quests and interacting with the protocol.
                                     </span>
                                   );
                                 })}
+                                </div>
                               </div>
+                              <p className="mt-3 text-xs leading-relaxed text-white/40">
+                                The detector keeps the latest words visible and resets to the first prompt word after a wrong next word.
+                              </p>
                             </div>
 
                             <div className="rounded-[20px] border border-[#163228] bg-[linear-gradient(180deg,rgba(7,26,20,0.96),rgba(6,16,13,0.96))] px-4 py-4 text-left sm:px-5">

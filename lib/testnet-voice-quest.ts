@@ -11,140 +11,146 @@ interface SignedVoiceQuestTokenPayload {
   exp: number;
 }
 
+interface VoiceQuestLanguageParts {
+  openings: string[];
+  actions: string[];
+  endings: string[];
+}
+
 const TOKEN_DURATION_MS = 15 * 60 * 1000;
 const DEFAULT_LANGUAGE_CODE = 'en-US';
 
-const SAFE_VOICE_QUEST_SENTENCES: Record<string, string[]> = {
-  ar: [
-    'يساعد سبيكر اي المستخدمين على قراءة جملة واضحة للتحقق من التسجيل اليومي.',
-    'يمنح اختبار الصوت اليومي المشاركين طريقة بسيطة لتأكيد الكلمات المنطوقة بدقة.',
-    'تجعل رحلة الصوت في سبيكر اي قراءة الجملة المطلوبة سهلة وآمنة.',
-  ],
-  bn: [
-    'স্পিকারএআই ব্যবহারকারীদের পরিষ্কারভাবে বাক্য পড়ে দৈনিক ভয়েস চেক সম্পন্ন করতে সাহায্য করে।',
-    'এই ভয়েস কুয়েস্ট অংশগ্রহণকারীদের সঠিক শব্দ পড়ে যাচাই করতে দেয়।',
-    'নিরাপদ রেকর্ডিং ধাপটি স্পষ্ট উচ্চারণ দিয়ে প্রতিদিনের টাস্ক শেষ করতে সাহায্য করে।',
-  ],
-  de: [
-    'SpeakerAI hilft Nutzern, einen klaren Satz zu lesen und die taegliche Sprachpruefung zu bestehen.',
-    'Diese Sprachaufgabe laesst Teilnehmer einen sicheren Testsatz deutlich vorlesen.',
-    'Der taegliche Aufnahmetest bestaetigt gesprochene Woerter mit einer kurzen klaren Lesung.',
-  ],
-  en: [
-    'SpeakerAI helps users read a clear sentence for the daily voice check.',
-    'This daily voice quest lets participants verify spoken words with a short safe phrase.',
-    'The SpeakerAI recording test confirms clear speech with an easy guided sentence.',
-  ],
-  es: [
-    'SpeakerAI ayuda a los usuarios a leer una frase clara para la verificacion diaria de voz.',
-    'Esta prueba de voz permite a los participantes confirmar palabras habladas con una frase segura.',
-    'El reto diario de grabacion verifica una lectura clara con una oracion sencilla.',
-  ],
-  fil: [
-    'Tinutulungan ng SpeakerAI ang mga user na bumasa ng malinaw na pangungusap para sa daily voice check.',
-    'Ang voice quest na ito ay para maberipika ang malinaw na pagbasa ng ligtas na prompt.',
-    'Pinapadali ng recording test ng SpeakerAI ang tamang pagbasa ng maikling pangungusap.',
-  ],
-  fr: [
-    'SpeakerAI aide les utilisateurs a lire une phrase claire pour la verification vocale quotidienne.',
-    'Cette quete vocale permet aux participants de confirmer des mots prononces avec une phrase simple.',
-    'Le test audio quotidien verifie une lecture nette avec une consigne sure.',
-  ],
-  hi: [
-    'स्पीकरएआई उपयोगकर्ताओं को दैनिक वॉइस जांच के लिए एक स्पष्ट वाक्य पढ़ने में मदद करता है।',
-    'यह वॉइस क्वेस्ट प्रतिभागियों को सुरक्षित पंक्ति बोलकर शब्दों की पुष्टि करने देता है।',
-    'दैनिक रिकॉर्डिंग परीक्षण साफ उच्चारण के साथ सरल वाक्य की जांच करता है।',
-  ],
-  id: [
-    'SpeakerAI membantu pengguna membaca kalimat jelas untuk pemeriksaan suara harian.',
-    'Tugas suara ini membuat peserta memverifikasi kata yang diucapkan dengan frasa aman.',
-    'Tes rekaman harian memeriksa ucapan yang jelas dengan kalimat panduan singkat.',
-  ],
-  it: [
-    'SpeakerAI aiuta gli utenti a leggere una frase chiara per la verifica vocale giornaliera.',
-    'Questa prova vocale consente ai partecipanti di confermare parole pronunciate con una frase sicura.',
-    'Il test di registrazione quotidiano verifica una lettura chiara con una frase semplice.',
-  ],
-  ja: [
-    'SpeakerAIは毎日の音声確認のために分かりやすい文を読めるようにします。',
-    'この音声クエストでは安全な文章を読み上げて話した言葉を確認します。',
-    '毎日の録音テストは短く明確な文章で発話を検証します。',
-  ],
-  ko: [
-    'SpeakerAI는 일일 음성 확인을 위해 명확한 문장을 읽도록 도와줍니다.',
-    '이 음성 퀘스트는 안전한 문장을 읽어 말한 단어를 확인합니다.',
-    '매일 녹음 테스트는 짧고 분명한 문장으로 발화를 검증합니다.',
-  ],
-  ms: [
-    'SpeakerAI membantu pengguna membaca ayat yang jelas untuk semakan suara harian.',
-    'Tugasan suara ini membolehkan peserta mengesahkan perkataan yang disebut dengan frasa selamat.',
-    'Ujian rakaman harian menyemak bacaan yang jelas dengan ayat panduan ringkas.',
-  ],
-  nl: [
-    'SpeakerAI helpt gebruikers een duidelijke zin te lezen voor de dagelijkse stemcontrole.',
-    'Deze stemopdracht laat deelnemers gesproken woorden bevestigen met een korte veilige zin.',
-    'De dagelijkse opnametest controleert duidelijke spraak met een eenvoudige begeleide zin.',
-  ],
-  pl: [
-    'SpeakerAI pomaga uzytkownikom przeczytac jasne zdanie do codziennej weryfikacji glosu.',
-    'To zadanie glosowe pozwala uczestnikom potwierdzic wypowiedziane slowa bezpieczna fraza.',
-    'Codzienny test nagrania sprawdza wyrazna mowe przy pomocy prostego zdania.',
-  ],
-  pt: [
-    'SpeakerAI ajuda os usuarios a ler uma frase clara para a verificacao diaria de voz.',
-    'Este desafio de voz permite aos participantes confirmar palavras faladas com uma frase segura.',
-    'O teste diario de gravacao verifica uma leitura clara com uma frase simples.',
-  ],
-  ru: [
-    'SpeakerAI помогает пользователям читать понятную фразу для ежедневной проверки голоса.',
-    'Это голосовое задание позволяет участникам подтвердить произнесенные слова безопасной фразой.',
-    'Ежедневный тест записи проверяет четкую речь с помощью простой подсказки.',
-  ],
-  sv: [
-    'SpeakerAI hjaelper anvandare att lasa en tydlig mening for den dagliga rostkontrollen.',
-    'Denna rostuppgift later deltagare bekrafta talade ord med en kort saker fras.',
-    'Det dagliga inspelningstestet verifierar tydligt tal med en enkel mening.',
-  ],
-  sw: [
-    'SpeakerAI husaidia watumiaji kusoma sentensi wazi kwa ukaguzi wa sauti wa kila siku.',
-    'Jaribio hili la sauti huruhusu washiriki kuthibitisha maneno yaliyosemwa kwa sentensi salama.',
-    'Mtihani wa kurekodi kila siku hukagua matamshi wazi kwa sentensi fupi rahisi.',
-  ],
-  ta: [
-    'SpeakerAI பயனர்களுக்கு தினசரி குரல் சரிபார்ப்புக்கு தெளிவான வாக்கியத்தை வாசிக்க உதவுகிறது.',
-    'இந்த குரல் பணியில் பாதுகாப்பான வரியை வாசித்து சொன்ன வார்த்தைகளை சரிபார்க்கலாம்.',
-    'தினசரி பதிவு சோதனை எளிய வாக்கியத்தின் மூலம் தெளிவான உச்சரிப்பை சரிபார்க்கிறது.',
-  ],
-  th: [
-    'SpeakerAI ช่วยให้ผู้ใช้อ่านประโยคที่ชัดเจนสำหรับการตรวจสอบเสียงประจำวัน',
-    'ภารกิจเสียงนี้ให้ผู้เข้าร่วมยืนยันคำพูดด้วยประโยคที่ปลอดภัยและอ่านง่าย',
-    'การทดสอบบันทึกเสียงรายวันตรวจสอบการพูดที่ชัดเจนด้วยประโยคสั้น ๆ',
-  ],
-  tr: [
-    'SpeakerAI kullanicilarin gunluk ses kontrolu icin acik bir cumle okumasina yardimci olur.',
-    'Bu ses gorevi katilimcilarin kisa ve guvenli bir ifade ile konusulan kelimeleri dogrulamasini saglar.',
-    'Gunluk kayit testi acik konusmayi basit bir yonlendirme cumlesi ile kontrol eder.',
-  ],
-  uk: [
-    'SpeakerAI допомагає користувачам читати зрозуміле речення для щоденної перевірки голосу.',
-    'Це голосове завдання дозволяє учасникам підтвердити сказані слова безпечною фразою.',
-    'Щоденний тест запису перевіряє чітке мовлення за допомогою простої підказки.',
-  ],
-  ur: [
-    'اسپیکر اے آئی صارفین کو روزانہ وائس چیک کے لیے واضح جملہ پڑھنے میں مدد دیتا ہے۔',
-    'یہ وائس کویسٹ شرکا کو محفوظ جملہ پڑھ کر بولے گئے الفاظ کی تصدیق کرنے دیتا ہے۔',
-    'روزانہ ریکارڈنگ ٹیسٹ سادہ جملے کے ساتھ واضح ادائیگی کی جانچ کرتا ہے۔',
-  ],
-  vi: [
-    'SpeakerAI giup nguoi dung doc mot cau ro rang cho viec kiem tra giong noi hang ngay.',
-    'Nhiem vu giong noi nay cho phep nguoi tham gia xac minh tu da noi bang mot cau an toan.',
-    'Bai kiem tra ghi am hang ngay xac minh cach doc ro rang bang mot cau don gian.',
-  ],
-  zh: [
-    'SpeakerAI帮助用户朗读清晰句子完成每日语音验证。',
-    '这个语音任务让参与者用安全短句确认朗读内容。',
-    '每日录音测试通过简短明确的句子验证发音。',
-  ],
+const SAFE_VOICE_QUEST_PROMPTS: Record<string, VoiceQuestLanguageParts> = {
+  ar: {
+    openings: ['يساعد سبيكر اي المستخدمين', 'يمنح اختبار الصوت اليومي المشاركين', 'تجعل رحلة الصوت في سبيكر اي'],
+    actions: ['على قراءة جملة واضحة', 'طريقة بسيطة لتأكيد الكلمات المنطوقة', 'قراءة الجملة المطلوبة بسهولة'],
+    endings: ['للتحقق من التسجيل اليومي.', 'بدقة وبشكل آمن.', 'وإكمال الفحص اليومي بسرعة.'],
+  },
+  bn: {
+    openings: ['স্পিকারএআই ব্যবহারকারীদের', 'এই ভয়েস কুয়েস্ট অংশগ্রহণকারীদের', 'নিরাপদ রেকর্ডিং ধাপটি'],
+    actions: ['পরিষ্কারভাবে বাক্য পড়তে সাহায্য করে', 'সঠিক শব্দ পড়ে যাচাই করতে দেয়', 'স্পষ্ট উচ্চারণে বাক্য মিলাতে সাহায্য করে'],
+    endings: ['দৈনিক ভয়েস চেক সম্পন্ন করতে।', 'নিরাপদ প্রম্পট অনুসরণ করতে।', 'প্রতিদিনের টাস্ক শেষ করতে।'],
+  },
+  de: {
+    openings: ['SpeakerAI hilft Nutzern', 'Diese Sprachaufgabe laesst Teilnehmer', 'Der taegliche Aufnahmetest'],
+    actions: ['einen klaren Satz lesen', 'einen sicheren Testsatz deutlich vorlesen', 'gesprochene Woerter sauber bestaetigen'],
+    endings: ['und die taegliche Sprachpruefung bestehen.', 'mit einer kurzen klaren Lesung.', 'waehrend der Tagescheck aktiv ist.'],
+  },
+  en: {
+    openings: ['SpeakerAI helps users', 'This daily voice quest lets participants', 'The SpeakerAI recording test'],
+    actions: ['read a clear sentence', 'verify spoken words with a safe phrase', 'confirm clear speech with a guided prompt'],
+    endings: ['for the daily voice check.', 'before claiming the daily reward.', 'during the secure recording step.'],
+  },
+  es: {
+    openings: ['SpeakerAI ayuda a los usuarios', 'Esta prueba de voz permite a los participantes', 'El reto diario de grabacion'],
+    actions: ['a leer una frase clara', 'confirmar palabras habladas con una frase segura', 'verificar una lectura clara con una oracion sencilla'],
+    endings: ['para la verificacion diaria de voz.', 'durante el paso seguro de grabacion.', 'antes de reclamar la recompensa diaria.'],
+  },
+  fil: {
+    openings: ['Tinutulungan ng SpeakerAI ang mga user', 'Ang voice quest na ito', 'Pinapadali ng recording test ng SpeakerAI'],
+    actions: ['na bumasa ng malinaw na pangungusap', 'na maberipika ang malinaw na pagbasa', 'ang tamang pagbasa ng maikling pangungusap'],
+    endings: ['para sa daily voice check.', 'ng ligtas na prompt.', 'bago kunin ang daily reward.'],
+  },
+  fr: {
+    openings: ['SpeakerAI aide les utilisateurs', 'Cette quete vocale permet aux participants', 'Le test audio quotidien'],
+    actions: ['a lire une phrase claire', 'de confirmer des mots prononces avec une phrase simple', 'de verifier une lecture nette avec une consigne sure'],
+    endings: ['pour la verification vocale quotidienne.', 'avant la recompense du jour.', 'pendant le controle vocal securise.'],
+  },
+  hi: {
+    openings: ['स्पीकरएआई उपयोगकर्ताओं को', 'यह वॉइस क्वेस्ट प्रतिभागियों को', 'दैनिक रिकॉर्डिंग परीक्षण'],
+    actions: ['एक स्पष्ट वाक्य पढ़ने में मदद करता है', 'सुरक्षित पंक्ति बोलकर शब्दों की पुष्टि करने देता है', 'साफ उच्चारण के साथ सरल वाक्य मिलाने देता है'],
+    endings: ['दैनिक वॉइस जांच के लिए।', 'दैनिक इनाम लेने से पहले।', 'सुरक्षित रिकॉर्डिंग चरण के दौरान।'],
+  },
+  id: {
+    openings: ['SpeakerAI membantu pengguna', 'Tugas suara ini membuat peserta', 'Tes rekaman harian'],
+    actions: ['membaca kalimat jelas', 'memverifikasi kata yang diucapkan dengan frasa aman', 'memeriksa ucapan yang jelas dengan kalimat panduan'],
+    endings: ['untuk pemeriksaan suara harian.', 'sebelum klaim hadiah harian.', 'selama langkah rekaman yang aman.'],
+  },
+  it: {
+    openings: ['SpeakerAI aiuta gli utenti', 'Questa prova vocale consente ai partecipanti', 'Il test di registrazione quotidiano'],
+    actions: ['a leggere una frase chiara', 'di confermare parole pronunciate con una frase sicura', 'di verificare una lettura chiara con una frase semplice'],
+    endings: ['per la verifica vocale giornaliera.', 'prima della ricompensa del giorno.', 'durante il passaggio di registrazione sicuro.'],
+  },
+  ja: {
+    openings: ['SpeakerAIは利用者が', 'この音声クエストでは参加者が', '毎日の録音テストでは'],
+    actions: ['分かりやすい文を読めるようにします', '安全な文章を読み上げて言葉を確認します', '短く明確な文章で発話を検証します'],
+    endings: ['毎日の音声確認のためです。', '報酬の確認前に行います。', '安全な録音手順の中で進みます。'],
+  },
+  ko: {
+    openings: ['SpeakerAI는 사용자가', '이 음성 퀘스트는 참가자가', '매일 녹음 테스트는'],
+    actions: ['명확한 문장을 읽도록 도와줍니다', '안전한 문장을 읽어 말한 단어를 확인합니다', '짧고 분명한 문장으로 발화를 검증합니다'],
+    endings: ['일일 음성 확인을 위해 진행됩니다.', '보상 전에 단어를 확인합니다.', '안전한 녹음 단계에서 동작합니다.'],
+  },
+  ms: {
+    openings: ['SpeakerAI membantu pengguna', 'Tugasan suara ini membolehkan peserta', 'Ujian rakaman harian'],
+    actions: ['membaca ayat yang jelas', 'mengesahkan perkataan yang disebut dengan frasa selamat', 'menyemak bacaan yang jelas dengan ayat panduan'],
+    endings: ['untuk semakan suara harian.', 'sebelum tuntutan ganjaran harian.', 'dalam langkah rakaman yang selamat.'],
+  },
+  nl: {
+    openings: ['SpeakerAI helpt gebruikers', 'Deze stemopdracht laat deelnemers', 'De dagelijkse opnametest'],
+    actions: ['een duidelijke zin te lezen', 'gesproken woorden bevestigen met een korte veilige zin', 'duidelijke spraak controleren met een eenvoudige zin'],
+    endings: ['voor de dagelijkse stemcontrole.', 'voor de dagelijkse beloning.', 'tijdens de veilige opnamestap.'],
+  },
+  pl: {
+    openings: ['SpeakerAI pomaga uzytkownikom', 'To zadanie glosowe pozwala uczestnikom', 'Codzienny test nagrania'],
+    actions: ['przeczytac jasne zdanie', 'potwierdzic wypowiedziane slowa bezpieczna fraza', 'sprawdzic wyrazna mowe prostym zdaniem'],
+    endings: ['do codziennej weryfikacji glosu.', 'przed odebraniem dziennej nagrody.', 'podczas bezpiecznego kroku nagrania.'],
+  },
+  pt: {
+    openings: ['SpeakerAI ajuda os usuarios', 'Este desafio de voz permite aos participantes', 'O teste diario de gravacao'],
+    actions: ['a ler uma frase clara', 'confirmar palavras faladas com uma frase segura', 'verificar uma leitura clara com uma frase simples'],
+    endings: ['para a verificacao diaria de voz.', 'antes da recompensa diaria.', 'durante a etapa segura de gravacao.'],
+  },
+  ru: {
+    openings: ['SpeakerAI помогает пользователям', 'Это голосовое задание позволяет участникам', 'Ежедневный тест записи'],
+    actions: ['читать понятную фразу', 'подтвердить произнесенные слова безопасной фразой', 'проверять четкую речь простой подсказкой'],
+    endings: ['для ежедневной проверки голоса.', 'перед получением дневной награды.', 'во время безопасного шага записи.'],
+  },
+  sv: {
+    openings: ['SpeakerAI hjaelper anvandare', 'Denna rostuppgift later deltagare', 'Det dagliga inspelningstestet'],
+    actions: ['att lasa en tydlig mening', 'bekrafta talade ord med en kort saker fras', 'verifiera tydligt tal med en enkel mening'],
+    endings: ['for den dagliga rostkontrollen.', 'innan dagens beloning.', 'under det sakra inspelningssteget.'],
+  },
+  sw: {
+    openings: ['SpeakerAI husaidia watumiaji', 'Jaribio hili la sauti huruhusu washiriki', 'Mtihani wa kurekodi kila siku'],
+    actions: ['kusoma sentensi wazi', 'kuthibitisha maneno yaliyosemwa kwa sentensi salama', 'kukagua matamshi wazi kwa sentensi fupi'],
+    endings: ['kwa ukaguzi wa sauti wa kila siku.', 'kabla ya kudai zawadi ya kila siku.', 'wakati wa hatua salama ya kurekodi.'],
+  },
+  ta: {
+    openings: ['SpeakerAI பயனர்களுக்கு', 'இந்த குரல் பணி பங்கேற்பாளர்களை', 'தினசரி பதிவு சோதனை'],
+    actions: ['தெளிவான வாக்கியத்தை வாசிக்க உதவுகிறது', 'பாதுகாப்பான வரியை வாசித்து சொற்களை சரிபார்க்க உதவுகிறது', 'எளிய வாக்கியத்தின் மூலம் தெளிவான உச்சரிப்பை சரிபார்க்கிறது'],
+    endings: ['தினசரி குரல் சரிபார்ப்புக்கு.', 'தினசரி பரிசை பெறும் முன்.', 'பாதுகாப்பான பதிவு கட்டத்தில்.'],
+  },
+  th: {
+    openings: ['SpeakerAI ช่วยให้ผู้ใช้', 'ภารกิจเสียงนี้ให้ผู้เข้าร่วม', 'การทดสอบบันทึกเสียงรายวัน'],
+    actions: ['อ่านประโยคที่ชัดเจน', 'ยืนยันคำพูดด้วยประโยคที่ปลอดภัย', 'ตรวจสอบการพูดที่ชัดเจนด้วยประโยคสั้น'],
+    endings: ['สำหรับการตรวจสอบเสียงประจำวัน', 'ก่อนรับรางวัลประจำวัน', 'ระหว่างขั้นตอนบันทึกเสียงที่ปลอดภัย'],
+  },
+  tr: {
+    openings: ['SpeakerAI kullanicilarin', 'Bu ses gorevi katilimcilarin', 'Gunluk kayit testi'],
+    actions: ['acik bir cumle okumasina yardimci olur', 'guvenli bir ifade ile konusulan kelimeleri dogrulamasini saglar', 'acik konusmayi basit bir yonlendirme cumlesi ile kontrol eder'],
+    endings: ['gunluk ses kontrolu icin.', 'gunluk odulden once.', 'guvenli kayit adimi sirasinda.'],
+  },
+  uk: {
+    openings: ['SpeakerAI допомагає користувачам', 'Це голосове завдання дозволяє учасникам', 'Щоденний тест запису'],
+    actions: ['читати зрозуміле речення', 'підтвердити сказані слова безпечною фразою', 'перевіряти чітке мовлення простою підказкою'],
+    endings: ['для щоденної перевірки голосу.', 'перед щоденною нагородою.', 'під час безпечного етапу запису.'],
+  },
+  ur: {
+    openings: ['اسپیکر اے آئی صارفین کو', 'یہ وائس کویسٹ شرکا کو', 'روزانہ ریکارڈنگ ٹیسٹ'],
+    actions: ['واضح جملہ پڑھنے میں مدد دیتا ہے', 'محفوظ جملہ پڑھ کر بولے گئے الفاظ کی تصدیق کرنے دیتا ہے', 'سادہ جملے کے ساتھ واضح ادائیگی کی جانچ کرتا ہے'],
+    endings: ['روزانہ وائس چیک کے لیے۔', 'روزانہ انعام لینے سے پہلے۔', 'محفوظ ریکارڈنگ مرحلے کے دوران۔'],
+  },
+  vi: {
+    openings: ['SpeakerAI giup nguoi dung', 'Nhiem vu giong noi nay cho phep nguoi tham gia', 'Bai kiem tra ghi am hang ngay'],
+    actions: ['doc mot cau ro rang', 'xac minh tu da noi bang mot cau an toan', 'kiem tra cach doc ro rang bang mot cau don gian'],
+    endings: ['cho viec kiem tra giong noi hang ngay.', 'truoc khi nhan thuong hang ngay.', 'trong buoc ghi am an toan.'],
+  },
+  zh: {
+    openings: ['SpeakerAI帮助用户', '这个语音任务让参与者', '每日录音测试'],
+    actions: ['朗读清晰句子', '用安全短句确认朗读内容', '通过简短明确的句子验证发音'],
+    endings: ['完成每日语音验证。', '再领取每日奖励。', '在安全录音步骤中完成。'],
+  },
 };
 
 const normalizeWallet = (value: string) => value.trim().toLowerCase();
@@ -191,16 +197,16 @@ function resolveVoiceQuestLanguage(languageCode: string | null | undefined) {
   const normalizedLanguageCode = normalizeLanguageCode(languageCode);
   const baseLanguage = normalizedLanguageCode.split('-')[0]?.toLowerCase() || 'en';
 
-  if (SAFE_VOICE_QUEST_SENTENCES[baseLanguage]) {
+  if (SAFE_VOICE_QUEST_PROMPTS[baseLanguage]) {
     return {
       languageCode: normalizedLanguageCode,
-      sentences: SAFE_VOICE_QUEST_SENTENCES[baseLanguage],
+      prompts: SAFE_VOICE_QUEST_PROMPTS[baseLanguage],
     };
   }
 
   return {
     languageCode: DEFAULT_LANGUAGE_CODE,
-    sentences: SAFE_VOICE_QUEST_SENTENCES.en,
+    prompts: SAFE_VOICE_QUEST_PROMPTS.en,
   };
 }
 
@@ -263,9 +269,12 @@ export function createVoiceQuestSentence(
   requestedLanguageCode?: string
 ) {
   const normalizedWalletAddress = normalizeWallet(walletAddress);
-  const { languageCode, sentences } = resolveVoiceQuestLanguage(requestedLanguageCode);
-  const randomIndex = Math.floor(Math.random() * sentences.length);
-  const expectedText = sentences[randomIndex];
+  const { languageCode, prompts } = resolveVoiceQuestLanguage(requestedLanguageCode);
+  const expectedText = [
+    prompts.openings[Math.floor(Math.random() * prompts.openings.length)],
+    prompts.actions[Math.floor(Math.random() * prompts.actions.length)],
+    prompts.endings[Math.floor(Math.random() * prompts.endings.length)],
+  ].join(' ');
 
   const payload: SignedVoiceQuestTokenPayload = {
     type: 'voice_sentence',
