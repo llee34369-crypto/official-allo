@@ -230,13 +230,7 @@ const normalizeSpeechText = (value: string) =>
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-const segmentSpeechText = (value: string, languageCode: string) => {
-  const normalized = normalizeSpeechText(value);
-
-  if (!normalized) {
-    return [];
-  }
-
+const getIntlSegmenter = (languageCode: string) => {
   const IntlWithSegmenter = Intl as typeof Intl & {
     Segmenter?: new (
       locales?: string | string[],
@@ -246,10 +240,24 @@ const segmentSpeechText = (value: string, languageCode: string) => {
     };
   };
 
-  if (IntlWithSegmenter.Segmenter) {
-    const segmenter = new IntlWithSegmenter.Segmenter(languageCode, {
-      granularity: 'word',
-    });
+  if (!IntlWithSegmenter.Segmenter) {
+    return null;
+  }
+
+  return new IntlWithSegmenter.Segmenter(languageCode, {
+    granularity: 'word',
+  });
+};
+const segmentSpeechText = (value: string, languageCode: string) => {
+  const normalized = normalizeSpeechText(value);
+
+  if (!normalized) {
+    return [];
+  }
+
+  const segmenter = getIntlSegmenter(languageCode);
+
+  if (segmenter) {
     const segmentedWords = Array.from(segmenter.segment(normalized))
       .filter((part) => part.isWordLike !== false)
       .map((part) => part.segment.trim())
@@ -261,6 +269,28 @@ const segmentSpeechText = (value: string, languageCode: string) => {
   }
 
   return normalized.split(' ').filter(Boolean);
+};
+const segmentDisplayText = (value: string, languageCode: string) => {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return [];
+  }
+
+  const segmenter = getIntlSegmenter(languageCode);
+
+  if (segmenter) {
+    const segments = Array.from(segmenter.segment(trimmed))
+      .filter((part) => part.isWordLike !== false)
+      .map((part) => part.segment)
+      .filter(Boolean);
+
+    if (segments.length) {
+      return segments;
+    }
+  }
+
+  return trimmed.split(/\s+/).filter(Boolean);
 };
 
 const getMatchedWordCount = (expectedWords: string[], spokenWords: string[]) => {
@@ -451,6 +481,11 @@ export default function WhitelistPage() {
   const normalizedTranscriptWords = normalizeSpeechText(voiceQuestTranscript)
     ? segmentSpeechText(voiceQuestTranscript, voiceQuestResolvedLanguageCode)
     : [];
+  const displayExpectedWords = segmentDisplayText(
+    voiceQuestExpectedText,
+    voiceQuestResolvedLanguageCode
+  );
+  const expectedTextUsesWhitespace = /\s/u.test(voiceQuestExpectedText);
   const requestedVoiceQuestLanguageCode =
     voiceQuestLanguageCode === CUSTOM_VOICE_QUEST_LANGUAGE_CODE
       ? voiceQuestCustomLanguageCode.trim() || DEFAULT_VOICE_QUEST_LANGUAGE_CODE
@@ -2399,7 +2434,7 @@ Earn more points by completing quests and interacting with the protocol.
           className="fixed inset-0 z-50 flex min-h-screen items-center justify-center overflow-y-auto bg-[#050102]/90 px-3 py-4 backdrop-blur-xl sm:px-4 sm:py-6"
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(170,24,24,0.34),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(255,110,110,0.12),transparent_28%)]" />
-          <div className="relative w-full max-w-[760px] overflow-hidden rounded-[28px] border border-[#7a1c1c]/50 bg-[linear-gradient(180deg,rgba(99,12,12,0.4),rgba(18,4,4,0.94))] shadow-[0_30px_120px_rgba(80,0,0,0.45)] sm:rounded-[36px]">
+          <div className="relative w-full max-w-[880px] overflow-hidden rounded-[28px] border border-[#7a1c1c]/50 bg-[linear-gradient(180deg,rgba(99,12,12,0.4),rgba(18,4,4,0.94))] shadow-[0_30px_120px_rgba(80,0,0,0.45)] sm:rounded-[36px]">
             <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),transparent_40%,rgba(255,90,90,0.06))]" />
             <div className="relative p-4 sm:p-6">
               <div className="mb-4 flex items-center justify-between">
@@ -2566,22 +2601,24 @@ Earn more points by completing quests and interacting with the protocol.
                     </span>
                   </div>
 
-                  <div className="rounded-[24px] border border-white/10 bg-black/55 p-4 sm:p-5">
-                    <div className="flex aspect-[16/10] min-h-[180px] items-center justify-center rounded-[20px] bg-black px-4 text-center sm:aspect-[21/9] sm:min-h-[240px] sm:px-8">
+                  <div className="rounded-[24px] border border-white/10 bg-black/55 p-3 sm:p-5">
+                    <div className="rounded-[20px] bg-[linear-gradient(180deg,#050505,#090909)] p-3 sm:p-5">
                       {voiceQuestStatus === 'countdown' && voiceQuestCountdown !== null ? (
-                        <p
-                          className={`font-display text-6xl font-black tracking-tight sm:text-8xl ${
-                            voiceQuestCountdown === 3
-                              ? 'text-brand-red'
-                              : voiceQuestCountdown === 2
-                                ? 'text-yellow-200'
-                                : 'text-green-400'
-                          }`}
-                        >
-                          {voiceQuestCountdown}
-                        </p>
+                        <div className="flex min-h-[220px] items-center justify-center sm:min-h-[320px]">
+                          <p
+                            className={`font-display text-6xl font-black tracking-tight sm:text-8xl ${
+                              voiceQuestCountdown === 3
+                                ? 'text-brand-red'
+                                : voiceQuestCountdown === 2
+                                  ? 'text-yellow-200'
+                                  : 'text-green-400'
+                            }`}
+                          >
+                            {voiceQuestCountdown}
+                          </p>
+                        </div>
                       ) : voiceQuestStatus === 'verifying' ? (
-                        <div className="flex flex-col items-center gap-5 text-white">
+                        <div className="flex min-h-[220px] flex-col items-center justify-center gap-5 text-white sm:min-h-[320px]">
                           <LoaderCircle className="h-8 w-8 animate-spin text-brand-red-glow sm:h-10 sm:w-10" />
                           <p className="font-display text-3xl font-black tracking-tight sm:text-4xl">Verifying</p>
                           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/50">
@@ -2589,7 +2626,7 @@ Earn more points by completing quests and interacting with the protocol.
                           </p>
                         </div>
                       ) : voiceQuestStatus === 'awaiting_desktop_signature' ? (
-                        <div className="flex flex-col items-center gap-5 text-white">
+                        <div className="flex min-h-[220px] flex-col items-center justify-center gap-5 text-white sm:min-h-[320px]">
                           <LoaderCircle className="h-8 w-8 animate-spin text-brand-red-glow sm:h-10 sm:w-10" />
                           <p className="font-display text-2xl font-black tracking-tight text-center sm:text-4xl">
                             Waiting For Desktop Signature
@@ -2599,12 +2636,12 @@ Earn more points by completing quests and interacting with the protocol.
                           </p>
                         </div>
                       ) : voiceQuestStatus === 'signing' ? (
-                        <div className="flex flex-col items-center gap-5 text-white">
+                        <div className="flex min-h-[220px] flex-col items-center justify-center gap-5 text-white sm:min-h-[320px]">
                           <LoaderCircle className="h-8 w-8 animate-spin text-brand-red-glow sm:h-10 sm:w-10" />
                           <p className="font-display text-3xl font-black tracking-tight sm:text-4xl">Sign Wallet</p>
                         </div>
                       ) : voiceQuestStatus === 'verified' ? (
-                        <div className="flex flex-col items-center gap-4 sm:gap-6">
+                        <div className="flex min-h-[220px] flex-col items-center justify-center gap-4 sm:min-h-[320px] sm:gap-6">
                           <p className="font-display text-3xl font-black tracking-tight text-white sm:text-4xl">
                             Sign Wallet
                           </p>
@@ -2618,85 +2655,114 @@ Earn more points by completing quests and interacting with the protocol.
                           </button>
                         </div>
                       ) : voiceQuestStatus === 'success' ? (
-                        <p className="font-display text-4xl font-black tracking-tight text-white sm:text-5xl">Done</p>
+                        <div className="flex min-h-[220px] items-center justify-center sm:min-h-[320px]">
+                          <p className="font-display text-4xl font-black tracking-tight text-white sm:text-5xl">Done</p>
+                        </div>
                       ) : (
-                        <div className="w-full max-w-[38rem]">
-                          <p className="max-w-[32rem] text-lg font-semibold leading-[1.85] tracking-[0.01em] text-white sm:text-[30px] sm:leading-[1.9]">
-                            {voiceQuestExpectedText.split(' ').map((word, index, words) => {
-                              const progressState = getWordProgressState(
-                                index,
-                                matchedWordCount,
-                                voiceQuestStatus
-                              );
-
-                              return (
-                                <span
-                                  key={`${word}-${index}`}
-                                  className={`inline rounded-lg px-1.5 py-1 transition-all duration-300 sm:rounded-xl sm:px-2 ${
-                                    progressState === 'matched'
-                                      ? 'bg-emerald-500 text-white shadow-[0_0_30px_rgba(16,185,129,0.35)]'
-                                      : progressState === 'active'
-                                        ? 'bg-[#2a0606] text-white ring-1 ring-[#ff8f8f]/70'
-                                        : 'text-white'
-                                  }`}
-                                >
-                                  {word}
-                                  {index < words.length - 1 ? ' ' : ''}
-                                </span>
-                              );
-                            })}
-                          </p>
-
-                          <div className="mt-5 rounded-[20px] border border-white/10 bg-[#090909] px-4 py-4 text-left">
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                                Detector Hears
-                              </span>
-                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/50">
-                                {voiceQuestStatus === 'recording'
-                                  ? `Live • ${voiceQuestResolvedLanguageCode}`
-                                  : `Preview • ${voiceQuestResolvedLanguageCode}`}
+                        <div className="grid gap-3 sm:gap-4">
+                          <div className="rounded-[20px] border border-[#451010] bg-black px-3 py-4 sm:px-6 sm:py-6">
+                            <div className="mb-3 flex flex-col gap-2 text-left sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                                  Read Prompt
+                                </p>
+                                <p className="mt-1 text-xs text-white/45">
+                                  Speak clearly and keep the words in order.
+                                </p>
+                              </div>
+                              <span className="inline-flex w-fit rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/55">
+                                {voiceQuestResolvedLanguageCode}
                               </span>
                             </div>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {(normalizedTranscriptWords.length
-                                ? normalizedTranscriptWords
-                                : ['Waiting for speech...']
-                              ).map((word, index) => {
-                                const isPlaceholder = !normalizedTranscriptWords.length;
-                                const isCorrect =
-                                  !isPlaceholder &&
-                                  index < matchedWordCount &&
-                                  normalizedExpectedWords[index] === word;
-                                const isCurrent =
-                                  !isPlaceholder && index === matchedWordCount;
+                            <p className="text-left text-[1.45rem] font-semibold leading-[1.7] tracking-[0.01em] text-white sm:text-[2.35rem] sm:leading-[1.6]">
+                              {displayExpectedWords.map((word, index, words) => {
+                                const progressState = getWordProgressState(
+                                  index,
+                                  matchedWordCount,
+                                voiceQuestStatus
+                              );
 
                                 return (
                                   <span
                                     key={`${word}-${index}`}
-                                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-all ${
-                                      isPlaceholder
-                                        ? 'border border-white/10 bg-white/[0.04] text-white/35'
-                                        : isCorrect
-                                          ? 'border border-emerald-400/30 bg-emerald-500/15 text-emerald-300'
-                                          : isCurrent
-                                            ? 'border border-[#ff8f8f]/30 bg-[#3a0d0d] text-[#ffd5d5]'
-                                            : 'border border-white/10 bg-white/[0.04] text-white/55'
+                                    className={`inline rounded-lg px-1 py-0.5 transition-all duration-300 sm:rounded-xl sm:px-2 sm:py-1 ${
+                                      progressState === 'matched'
+                                        ? 'bg-emerald-500 text-white shadow-[0_0_30px_rgba(16,185,129,0.35)]'
+                                        : progressState === 'active'
+                                          ? 'bg-[#2a0606] text-white ring-1 ring-[#ff8f8f]/70'
+                                          : 'text-white'
                                     }`}
                                   >
                                     {word}
+                                    {index < words.length - 1 && expectedTextUsesWhitespace
+                                      ? ' '
+                                      : ''}
                                   </span>
                                 );
                               })}
-                            </div>
-                            {voiceQuestStatus === 'recording' && normalizedExpectedWords.length ? (
-                              <p className="mt-3 text-xs leading-relaxed text-white/45">
-                                Next word:{' '}
-                                <span className="font-black uppercase tracking-[0.18em] text-emerald-300">
-                                  {normalizedExpectedWords[matchedWordCount] ?? 'Complete'}
+                            </p>
+                          </div>
+
+                          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+                            <div className="rounded-[20px] border border-white/10 bg-[#090909] px-4 py-4 text-left sm:px-5">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <span className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                                  Detector Hears
                                 </span>
+                                <span className="inline-flex w-fit rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/50">
+                                  {voiceQuestStatus === 'recording'
+                                    ? `Live • ${voiceQuestResolvedLanguageCode}`
+                                    : `Preview • ${voiceQuestResolvedLanguageCode}`}
+                                </span>
+                              </div>
+                              <div className="mt-3 flex min-h-[68px] flex-wrap gap-2">
+                                {(normalizedTranscriptWords.length
+                                  ? normalizedTranscriptWords
+                                  : ['Waiting for speech...']
+                                ).map((word, index) => {
+                                  const isPlaceholder = !normalizedTranscriptWords.length;
+                                  const isCorrect =
+                                    !isPlaceholder &&
+                                    index < matchedWordCount &&
+                                    normalizedExpectedWords[index] === word;
+                                  const isCurrent =
+                                    !isPlaceholder && index === matchedWordCount;
+
+                                  return (
+                                    <span
+                                      key={`${word}-${index}`}
+                                      className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-all ${
+                                        isPlaceholder
+                                          ? 'border border-white/10 bg-white/[0.04] text-white/35'
+                                          : isCorrect
+                                            ? 'border border-emerald-400/30 bg-emerald-500/15 text-emerald-300'
+                                            : isCurrent
+                                              ? 'border border-[#ff8f8f]/30 bg-[#3a0d0d] text-[#ffd5d5]'
+                                              : 'border border-white/10 bg-white/[0.04] text-white/55'
+                                      }`}
+                                    >
+                                      {word}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="rounded-[20px] border border-[#163228] bg-[linear-gradient(180deg,rgba(7,26,20,0.96),rgba(6,16,13,0.96))] px-4 py-4 text-left sm:px-5">
+                              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300/60">
+                                Next Word
                               </p>
-                            ) : null}
+                              <p className="mt-3 text-lg font-black uppercase tracking-[0.16em] text-emerald-300 break-words sm:text-xl">
+                                {voiceQuestStatus === 'recording' && normalizedExpectedWords.length
+                                  ? normalizedExpectedWords[matchedWordCount] ?? 'Complete'
+                                  : 'Ready'}
+                              </p>
+                              <p className="mt-4 text-xs leading-relaxed text-white/45">
+                                {voiceQuestStatus === 'recording'
+                                  ? 'Follow the highlight and keep a steady pace.'
+                                  : 'The detector preview updates after recording starts.'}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       )}
