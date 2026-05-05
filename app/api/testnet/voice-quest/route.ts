@@ -19,6 +19,7 @@ import {
   verifyVoiceQuestClaimToken,
   verifyVoiceQuestSentenceToken,
 } from '@/lib/testnet-voice-quest';
+import { verifyTestnetWalletSessionToken } from '@/lib/testnet-wallet-session';
 import {
   isSameOriginRequest,
   takeRateLimitToken,
@@ -37,6 +38,7 @@ interface ClaimVoiceQuestPayload {
   walletAddress?: unknown;
   signature?: unknown;
   claimToken?: unknown;
+  sessionToken?: unknown;
 }
 
 type VoiceQuestPayload = VerifyVoiceQuestPayload | ClaimVoiceQuestPayload;
@@ -216,10 +218,12 @@ export async function POST(request: Request) {
         typeof payload.signature === 'string' ? payload.signature.trim() : '';
       const claimToken =
         typeof payload.claimToken === 'string' ? payload.claimToken.trim() : '';
+      const sessionToken =
+        typeof payload.sessionToken === 'string' ? payload.sessionToken.trim() : '';
 
-      if (!signature) {
+      if (!signature && !sessionToken) {
         return NextResponse.json(
-          { error: 'A valid wallet signature is required.' },
+          { error: 'A valid wallet signature or session token is required.' },
           { status: 400 }
         );
       }
@@ -232,14 +236,16 @@ export async function POST(request: Request) {
       }
 
       const claimPayload = verifyVoiceQuestClaimToken(claimToken, walletAddress);
-      const isVerified = await verifyMessage({
-        address: walletAddress as `0x${string}`,
-        message: getDailyVoiceQuestOwnershipMessage(
-          walletAddress,
-          claimPayload.expectedText
-        ),
-        signature: signature as `0x${string}`,
-      });
+      const isVerified = sessionToken
+        ? Boolean(verifyTestnetWalletSessionToken(sessionToken, walletAddress))
+        : await verifyMessage({
+            address: walletAddress as `0x${string}`,
+            message: getDailyVoiceQuestOwnershipMessage(
+              walletAddress,
+              claimPayload.expectedText
+            ),
+            signature: signature as `0x${string}`,
+          });
 
       if (!isVerified) {
         return NextResponse.json(

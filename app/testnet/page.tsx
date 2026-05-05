@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 import { AppKit } from '@web3modal/base';
 import { ConnectorController, OptionsController } from '@web3modal/core';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
-import { useAccount, useConnections, useConnectors, useDisconnect, useSignMessage } from 'wagmi';
+import { useAccount, useConnectors, useDisconnect, useSignMessage } from 'wagmi';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -234,9 +234,8 @@ export default function WhitelistPage() {
     excludeWalletIds: typeof OptionsController.state.excludeWalletIds;
     featuredWalletIds: typeof OptionsController.state.featuredWalletIds;
   } | null>(null);
-  const { address, isConnected } = useAccount();
+  const { address, connector, isConnected, isReconnecting, status } = useAccount();
   const { open } = useWeb3Modal();
-  const connections = useConnections();
   const connectors = useConnectors();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
@@ -282,6 +281,7 @@ export default function WhitelistPage() {
   const [mobileVoiceQuestRequested, setMobileVoiceQuestRequested] = useState(false);
   const [walletSessionToken, setWalletSessionToken] = useState<string | null>(null);
   const [mobileWalletSessionToken, setMobileWalletSessionToken] = useState('');
+  const [mobileSessionWalletAddress, setMobileSessionWalletAddress] = useState('');
   const mobileVoiceQuestPromptedRef = useRef(false);
   const mobileVoiceQuestOpenedRef = useRef(false);
   const spkConnector = connectors.find((connector) =>
@@ -291,15 +291,16 @@ export default function WhitelistPage() {
       rdns: connector.rdns,
     })
   );
-  const activeConnector = connections[connections.length - 1]?.connector;
   const isConnectedWithSpkWallet = matchesSpkWallet({
-    id: activeConnector?.id,
-    name: activeConnector?.name,
-    rdns: activeConnector?.rdns,
+    id: connector?.id,
+    name: connector?.name,
+    rdns: connector?.rdns,
   });
   const canClaimSpkWalletQuest = Boolean(isConnected && address && isConnectedWithSpkWallet);
   const hasCompletedSpkWalletQuest = downloadSpkWalletQuestClaimed;
-  const hasUnlockedTestnetPage = Boolean(canClaimSpkWalletQuest && walletVerifiedForSession);
+  const activeQuestWalletAddress =
+    (address && canClaimSpkWalletQuest ? address : mobileSessionWalletAddress) || '';
+  const hasUnlockedTestnetPage = Boolean(activeQuestWalletAddress && walletVerifiedForSession);
   const normalizedConnectedAddress = address ? normalizeWalletAddress(address) : '';
   const normalizedMobileVoiceQuestWallet = mobileVoiceQuestWallet
     ? normalizeWalletAddress(mobileVoiceQuestWallet)
@@ -483,6 +484,15 @@ export default function WhitelistPage() {
 
   useEffect(() => {
     if (!(isConnected && address && isConnectedWithSpkWallet)) {
+      if (
+        mobileVoiceQuestRequested &&
+        mobileSessionWalletAddress &&
+        mobileWalletSessionToken &&
+        walletVerifiedForSession
+      ) {
+        return;
+      }
+
       setWalletPoints(null);
       setWalletPointsLoading(false);
       setWalletPointsWarning(null);
@@ -698,16 +708,24 @@ export default function WhitelistPage() {
       abortController.abort();
       clearRealtimeConnection();
     };
-  }, [address, isConnected, isConnectedWithSpkWallet]);
+  }, [
+    address,
+    isConnected,
+    isConnectedWithSpkWallet,
+    mobileSessionWalletAddress,
+    mobileVoiceQuestRequested,
+    mobileWalletSessionToken,
+    walletVerifiedForSession,
+  ]);
 
   useEffect(() => {
-    if (!(address && canClaimSpkWalletQuest)) {
+    if (!activeQuestWalletAddress || !walletVerifiedForSession) {
       return;
     }
 
     const abortController = new AbortController();
 
-    void fetchVoiceQuestSession(address, abortController.signal).catch((error) => {
+    void fetchVoiceQuestSession(activeQuestWalletAddress, abortController.signal).catch((error) => {
       if (!abortController.signal.aborted) {
         console.error('Failed to load voice quest status:', error);
       }
@@ -716,7 +734,7 @@ export default function WhitelistPage() {
     return () => {
       abortController.abort();
     };
-  }, [address, canClaimSpkWalletQuest]);
+  }, [activeQuestWalletAddress, walletVerifiedForSession]);
 
   useEffect(() => {
     if (!(address && canClaimSpkWalletQuest) || walletVerifiedForSession) {
@@ -874,6 +892,64 @@ export default function WhitelistPage() {
     setMobileVoiceQuestWallet(walletFromUrl);
     setMobileWalletSessionToken(sessionFromUrl);
   }, []);
+
+  useEffect(() => {
+    if (
+      !mobileVoiceQuestRequested ||
+      !normalizedMobileVoiceQuestWallet ||
+      !mobileWalletSessionToken ||
+      canClaimSpkWalletQuest
+    ) {
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    const restoreMobileSession = async () => {
+      try {
+        const response = await fetch(
+          `/api/testnet/session?address=${encodeURIComponent(
+            normalizedMobileVoiceQuestWallet
+          )}&token=${encodeURIComponent(mobileWalletSessionToken)}`,
+          {
+            method: 'GET',
+            cache: 'no-store',
+            signal: abortController.signal,
+          }
+        );
+
+        const payload = (await response.json()) as WalletSessionResponse | undefined;
+
+        if (!response.ok || payload?.ok !== true) {
+          throw new Error(payload?.error || 'Unable to restore your mobile session.');
+        }
+
+        setMobileSessionWalletAddress(normalizedMobileVoiceQuestWallet);
+        setWalletVerifiedForSession(true);
+        setQuestClaimStatus('claimed');
+        setQuestClaimWarning(null);
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setQuestClaimWarning(
+          error instanceof Error ? error.message : 'Unable to restore your mobile session.'
+        );
+      }
+    };
+
+    void restoreMobileSession();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [
+    canClaimSpkWalletQuest,
+    mobileVoiceQuestRequested,
+    mobileWalletSessionToken,
+    normalizedMobileVoiceQuestWallet,
+  ]);
 
   useEffect(() => {
     if (!(address && canClaimSpkWalletQuest) || walletVerifiedForSession) {
@@ -1145,6 +1221,10 @@ export default function WhitelistPage() {
       return;
     }
 
+    if (mobileWalletSessionToken && normalizedMobileVoiceQuestWallet) {
+      return;
+    }
+
     if (canClaimSpkWalletQuest) {
       return;
     }
@@ -1163,6 +1243,7 @@ export default function WhitelistPage() {
   }, [
     canClaimSpkWalletQuest,
     isMobileViewport,
+    mobileWalletSessionToken,
     mobileVoiceQuestRequested,
     normalizedMobileVoiceQuestWallet,
     open,
@@ -1195,11 +1276,12 @@ export default function WhitelistPage() {
       return;
     }
 
-    if (!(address && canClaimSpkWalletQuest && walletVerifiedForSession)) {
+    if (!hasUnlockedTestnetPage || !activeQuestWalletAddress) {
       return;
     }
 
     if (
+      address &&
       normalizedMobileVoiceQuestWallet &&
       normalizedConnectedAddress !== normalizedMobileVoiceQuestWallet
     ) {
@@ -1212,13 +1294,13 @@ export default function WhitelistPage() {
     mobileVoiceQuestOpenedRef.current = true;
     openVoiceQuest();
   }, [
+    activeQuestWalletAddress,
     address,
-    canClaimSpkWalletQuest,
+    hasUnlockedTestnetPage,
     isMobileViewport,
     mobileVoiceQuestRequested,
     normalizedConnectedAddress,
     normalizedMobileVoiceQuestWallet,
-    walletVerifiedForSession,
   ]);
 
   const stopVoiceRecording = () => {
@@ -1236,7 +1318,7 @@ export default function WhitelistPage() {
   };
 
   const beginVoiceQuestCountdown = async () => {
-    if (!(address && hasUnlockedTestnetPage)) {
+    if (!activeQuestWalletAddress || !hasUnlockedTestnetPage) {
       setVoiceQuestWarning('Sign in with your SPK Wallet first.');
       return;
     }
@@ -1249,7 +1331,7 @@ export default function WhitelistPage() {
     setVoiceQuestWarning(null);
 
     try {
-      await fetchVoiceQuestSession(address);
+      await fetchVoiceQuestSession(activeQuestWalletAddress);
       setVoiceQuestTranscript('');
       setVoiceQuestBlob(null);
       setVoiceQuestMimeType('audio/webm');
@@ -1281,7 +1363,7 @@ export default function WhitelistPage() {
   };
 
   const verifyVoiceQuestRecording = async () => {
-    if (!(address && hasUnlockedTestnetPage)) {
+    if (!activeQuestWalletAddress || !hasUnlockedTestnetPage) {
       setVoiceQuestWarning('Sign in with your SPK Wallet first.');
       setVoiceQuestStatus('legal');
       return;
@@ -1310,7 +1392,7 @@ export default function WhitelistPage() {
         },
         body: JSON.stringify({
           action: 'verify',
-          walletAddress: address,
+          walletAddress: activeQuestWalletAddress,
           transcript: voiceQuestTranscript,
           sentenceToken: voiceQuestSentenceToken,
           legalAccepted: voiceQuestLegalAccepted,
@@ -1335,7 +1417,7 @@ export default function WhitelistPage() {
   };
 
   const claimVerifiedVoiceQuest = async () => {
-    if (!(address && hasUnlockedTestnetPage)) {
+    if (!activeQuestWalletAddress || !hasUnlockedTestnetPage) {
       setVoiceQuestWarning('Sign in with your SPK Wallet first.');
       return;
     }
@@ -1349,9 +1431,15 @@ export default function WhitelistPage() {
     setVoiceQuestWarning(null);
 
     try {
-      const signature = await signMessageAsync({
-        message: getDailyVoiceQuestOwnershipMessage(address, voiceQuestExpectedText),
-      });
+      const signature =
+        address && canClaimSpkWalletQuest
+          ? await signMessageAsync({
+              message: getDailyVoiceQuestOwnershipMessage(
+                activeQuestWalletAddress,
+                voiceQuestExpectedText
+              ),
+            })
+          : undefined;
 
       const audioBuffer = await voiceQuestBlob.arrayBuffer();
       const audioBase64 = btoa(
@@ -1367,9 +1455,10 @@ export default function WhitelistPage() {
         },
         body: JSON.stringify({
           action: 'claim',
-          walletAddress: address,
+          walletAddress: activeQuestWalletAddress,
           signature,
           claimToken: voiceQuestClaimToken,
+          sessionToken: !signature ? mobileWalletSessionToken : undefined,
           audioBase64,
           audioMimeType: voiceQuestMimeType,
         }),
@@ -1685,6 +1774,54 @@ Earn more points by completing quests and interacting with the protocol.
                       Disconnect
                     </button>
                   </>
+                ) : hasUnlockedTestnetPage && activeQuestWalletAddress ? (
+                  <div className="grid w-full max-w-3xl gap-4 text-left">
+                    <div className="flex w-full flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold text-white/85 sm:w-auto sm:gap-3 sm:px-5 sm:text-sm">
+                      <Smartphone className="h-4 w-4 text-brand-red-glow" />
+                      {shortenAddress(activeQuestWalletAddress)}
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-emerald-200">
+                        Mobile Session
+                      </span>
+                    </div>
+                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4 sm:rounded-[28px] sm:p-6">
+                      <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-5 sm:px-5 sm:py-6">
+                        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/40">
+                          Desktop Authenticated
+                        </p>
+                        <p className="mt-3 font-display text-2xl font-black tracking-tight text-white sm:text-3xl">
+                          Continue voice quest on mobile
+                        </p>
+                        <p className="mt-3 max-w-xl text-xs leading-relaxed text-white/55 sm:text-sm">
+                          This phone is using the session from your desktop QR scan. No wallet reconnect is required here.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={openVoiceQuest}
+                          disabled={voiceQuestRemainingToday <= 0}
+                          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-red px-4 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-brand-red-glow disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:tracking-[0.28em]"
+                        >
+                          <Mic className="h-4 w-4" />
+                          Record Voice
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : status === 'reconnecting' || isReconnecting ? (
+                  <div className="w-full max-w-2xl rounded-[22px] border border-white/10 bg-white/[0.04] p-4 text-left sm:rounded-[28px] sm:p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 sm:h-11 sm:w-11 sm:rounded-2xl">
+                        <LoaderCircle className="h-4 w-4 animate-spin text-brand-red-glow sm:h-5 sm:w-5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                          Restoring Session
+                        </p>
+                        <p className="mt-1 text-sm leading-relaxed text-white/60">
+                          Reconnecting your SPK Wallet after refresh.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 ) : isConnected && address ? (
                   <>
                     <div className="flex items-center gap-3 rounded-2xl border border-[#ff7c7c]/20 bg-[#4a0a0a]/40 px-5 py-3 text-sm font-semibold text-[#ffd0d0]">
