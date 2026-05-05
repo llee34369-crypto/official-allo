@@ -10,6 +10,7 @@ import {
   claimQuestReward,
   isTestnetWalletPointsConfigured,
 } from '@/lib/testnet-wallet-points';
+import { createTestnetWalletSessionToken } from '@/lib/testnet-wallet-session';
 import {
   isSameOriginRequest,
   takeRateLimitToken,
@@ -102,6 +103,7 @@ export async function POST(request: Request) {
       questId,
       DOWNLOAD_SPK_WALLET_QUEST_REWARD_POINTS
     );
+    const sessionToken = createTestnetWalletSessionToken(walletAddress);
 
     return NextResponse.json({
       ok: true,
@@ -110,6 +112,7 @@ export async function POST(request: Request) {
       alreadyClaimed: claimResult.alreadyClaimed,
       rewardPoints: claimResult.addedPoints,
       points: claimResult.totalPoints,
+      sessionToken,
     });
   } catch (error) {
     console.error('Failed to claim testnet quest reward:', error);

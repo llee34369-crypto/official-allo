@@ -60,6 +60,12 @@ interface WalletPointsRealtimeConfigResponse {
   realtime?: WalletPointsRealtimeConfig;
 }
 
+interface WalletSessionResponse {
+  error?: string;
+  ok?: boolean;
+  status?: string;
+}
+
 interface RealtimePostgresChangeRecord {
   [key: string]: string | number | boolean | null | undefined;
 }
@@ -168,6 +174,8 @@ function DiscordLogo(props: SVGProps<SVGSVGElement>) {
 const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 const formatPoints = (value: number) => new Intl.NumberFormat('en-US').format(value);
 const normalizeWalletAddress = (value: string) => value.trim().toLowerCase();
+const getWalletSessionStorageKey = (walletAddress: string) =>
+  `speakerai:testnet-session:${normalizeWalletAddress(walletAddress)}`;
 const normalizeSpeechText = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -272,6 +280,8 @@ export default function WhitelistPage() {
   const [mobileOpenUrl, setMobileOpenUrl] = useState('');
   const [mobileVoiceQuestWallet, setMobileVoiceQuestWallet] = useState('');
   const [mobileVoiceQuestRequested, setMobileVoiceQuestRequested] = useState(false);
+  const [walletSessionToken, setWalletSessionToken] = useState<string | null>(null);
+  const [mobileWalletSessionToken, setMobileWalletSessionToken] = useState('');
   const mobileVoiceQuestPromptedRef = useRef(false);
   const mobileVoiceQuestOpenedRef = useRef(false);
   const spkConnector = connectors.find((connector) =>
@@ -429,6 +439,7 @@ export default function WhitelistPage() {
             status?: string;
             rewardPoints?: number;
             alreadyClaimed?: boolean;
+            sessionToken?: string;
           }
         | undefined;
 
@@ -439,6 +450,7 @@ export default function WhitelistPage() {
       setWalletVerifiedForSession(true);
       setDownloadSpkWalletQuestClaimed(true);
       setQuestClaimStatus('claimed');
+      setWalletSessionToken(payload?.sessionToken?.trim() || null);
       setWalletPoints((currentPoints) =>
         typeof payload?.points === 'number' ? payload.points : currentPoints
       );
@@ -448,6 +460,13 @@ export default function WhitelistPage() {
           ? 'Your wallet is connected. This reward has already been claimed, so your SP balance stays the same.'
           : null
       );
+
+      if (typeof window !== 'undefined' && payload?.sessionToken?.trim()) {
+        window.localStorage.setItem(
+          getWalletSessionStorageKey(address),
+          payload.sessionToken.trim()
+        );
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to claim the testnet quest reward.';
@@ -469,6 +488,7 @@ export default function WhitelistPage() {
       setWalletPointsWarning(null);
       setDownloadSpkWalletQuestClaimed(false);
       setWalletVerifiedForSession(false);
+      setWalletSessionToken(null);
       setQuestClaimStatus('idle');
       setQuestClaimWarning(null);
       autoClaimAttemptedRef.current = null;
@@ -827,10 +847,14 @@ export default function WhitelistPage() {
     if (voiceQuestOpen && address) {
       mobileUrl.searchParams.set('voiceQuest', '1');
       mobileUrl.searchParams.set('wallet', normalizeWalletAddress(address));
+
+      if (walletVerifiedForSession && walletSessionToken) {
+        mobileUrl.searchParams.set('session', walletSessionToken);
+      }
     }
 
     setMobileOpenUrl(mobileUrl.toString());
-  }, [address, voiceQuestOpen]);
+  }, [address, voiceQuestOpen, walletSessionToken, walletVerifiedForSession]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -840,6 +864,7 @@ export default function WhitelistPage() {
     const searchParams = new URLSearchParams(window.location.search);
     const wantsVoiceQuest = searchParams.get('voiceQuest') === '1';
     const walletFromUrl = searchParams.get('wallet')?.trim() ?? '';
+    const sessionFromUrl = searchParams.get('session')?.trim() ?? '';
 
     if (!wantsVoiceQuest) {
       return;
@@ -847,7 +872,87 @@ export default function WhitelistPage() {
 
     setMobileVoiceQuestRequested(true);
     setMobileVoiceQuestWallet(walletFromUrl);
+    setMobileWalletSessionToken(sessionFromUrl);
   }, []);
+
+  useEffect(() => {
+    if (!(address && canClaimSpkWalletQuest) || walletVerifiedForSession) {
+      return;
+    }
+
+    const storedSessionToken =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem(getWalletSessionStorageKey(address))?.trim() || ''
+        : '';
+    const nextSessionToken = mobileWalletSessionToken || storedSessionToken || walletSessionToken || '';
+
+    if (!nextSessionToken) {
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    const restoreWalletSession = async () => {
+      try {
+        const response = await fetch(
+          `/api/testnet/session?address=${encodeURIComponent(address)}&token=${encodeURIComponent(
+            nextSessionToken
+          )}`,
+          {
+            method: 'GET',
+            cache: 'no-store',
+            signal: abortController.signal,
+          }
+        );
+
+        const payload = (await response.json()) as WalletSessionResponse | undefined;
+
+        if (!response.ok || payload?.ok !== true) {
+          throw new Error(payload?.error || 'Unable to restore your wallet session.');
+        }
+
+        setWalletSessionToken(nextSessionToken);
+        setWalletVerifiedForSession(true);
+        setQuestClaimStatus('claimed');
+        setQuestClaimWarning(null);
+
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(
+            getWalletSessionStorageKey(address),
+            nextSessionToken
+          );
+        }
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        const message =
+          error instanceof Error ? error.message : 'Unable to restore your wallet session.';
+
+        if (
+          typeof window !== 'undefined' &&
+          (message.toLowerCase().includes('expired') ||
+            message.toLowerCase().includes('invalid') ||
+            message.toLowerCase().includes('mismatch'))
+        ) {
+          window.localStorage.removeItem(getWalletSessionStorageKey(address));
+        }
+      }
+    };
+
+    void restoreWalletSession();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [
+    address,
+    canClaimSpkWalletQuest,
+    mobileWalletSessionToken,
+    walletSessionToken,
+    walletVerifiedForSession,
+  ]);
 
   useEffect(() => {
     if (!(typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices)) {
