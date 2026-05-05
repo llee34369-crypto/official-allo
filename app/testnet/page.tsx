@@ -1640,11 +1640,11 @@ export default function WhitelistPage() {
           return;
         }
 
-        desktopVoiceQuestRequestHandledRef.current = requestId;
         setVoiceQuestOpen(true);
         setVoiceQuestWarning(null);
         const expectedText = payload.expectedText?.trim() || '';
         const claimToken = payload.claimToken.trim();
+        desktopVoiceQuestRequestHandledRef.current = requestId;
         setVoiceQuestExpectedText(expectedText);
         setVoiceQuestClaimToken(claimToken);
         setVoiceQuestStatus('signing');
@@ -1997,12 +1997,18 @@ export default function WhitelistPage() {
       const message =
         error instanceof Error ? error.message : 'Unable to submit the voice quest.';
 
+      if (pendingDesktopVoiceQuestRequestId) {
+        desktopVoiceQuestRequestHandledRef.current = null;
+      }
+
       setVoiceQuestWarning(
         message.toLowerCase().includes('user rejected')
           ? 'Signature request was cancelled.'
           : message
       );
-      setVoiceQuestStatus('verified');
+      setVoiceQuestStatus(
+        pendingDesktopVoiceQuestRequestId ? 'awaiting_desktop_signature' : 'verified'
+      );
     }
   };
 

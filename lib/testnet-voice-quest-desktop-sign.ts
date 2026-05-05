@@ -11,7 +11,7 @@ interface PendingDesktopVoiceQuestSign {
   claimedAt: number | null;
 }
 
-const TTL_MS = 15 * 60 * 1000;
+const TTL_MS = 30 * 60 * 1000;
 const pendingByWallet = new Map<string, PendingDesktopVoiceQuestSign>();
 
 const normalizeWalletAddress = (value: string) => value.trim().toLowerCase();
