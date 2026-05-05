@@ -2589,15 +2589,20 @@ Earn more points by completing quests and interacting with the protocol.
                       </div>
                       <div className="relative min-w-0 w-full sm:max-w-[19rem]">
                         {shouldUseNativeVoiceLanguageSelector ? (
-                          <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-4 py-3">
-                            <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
-                              Selected
-                            </label>
-                            <div className="relative mt-2">
+                          <div className="rounded-[22px] border border-[#7a1c1c]/35 bg-[linear-gradient(180deg,rgba(46,8,8,0.9),rgba(16,5,5,0.92))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                            <div className="flex items-center justify-between gap-3">
+                              <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
+                                Selected
+                              </label>
+                              <span className="rounded-full border border-[#ff8f8f]/20 bg-[#6d0e0e]/30 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.2em] text-[#ffb0b0]">
+                                Mobile
+                              </span>
+                            </div>
+                            <div className="relative mt-3 overflow-hidden rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]">
                               <select
                                 value={voiceQuestLanguageCode}
                                 onChange={(event) => setVoiceQuestLanguageCode(event.target.value)}
-                                className="w-full appearance-none rounded-xl border border-white/10 bg-black/35 px-3 py-3 pr-11 text-sm font-semibold leading-tight text-white outline-none transition-all focus:border-[#ff8f8f]/60"
+                                className="w-full appearance-none bg-transparent px-4 py-3.5 pr-12 text-sm font-semibold leading-tight text-white outline-none transition-all"
                               >
                                 {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => (
                                   <option
@@ -2609,7 +2614,9 @@ Earn more points by completing quests and interacting with the protocol.
                                   </option>
                                 ))}
                               </select>
-                              <ChevronRight className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-white/55" />
+                              <div className="pointer-events-none absolute inset-y-0 right-0 flex w-11 items-center justify-center border-l border-white/10 bg-white/[0.04]">
+                                <ChevronRight className="h-4 w-4 rotate-90 text-white/55" />
+                              </div>
                             </div>
                           </div>
                         ) : (
