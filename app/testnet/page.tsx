@@ -250,6 +250,8 @@ export default function WhitelistPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
+  const speechRecognitionRestartTimeoutRef = useRef<number | null>(null);
+  const speechRecognitionStoppingRef = useRef(false);
   const voiceChunksRef = useRef<Blob[]>([]);
   const voiceQuestCancelledRef = useRef(false);
   const originalConnectorStateRef = useRef<{
@@ -376,10 +378,16 @@ export default function WhitelistPage() {
 
   const stopVoiceCapture = () => {
     voiceQuestCancelledRef.current = true;
+    speechRecognitionStoppingRef.current = true;
 
     if (countdownTimeoutRef.current !== null) {
       window.clearTimeout(countdownTimeoutRef.current);
       countdownTimeoutRef.current = null;
+    }
+
+    if (speechRecognitionRestartTimeoutRef.current !== null) {
+      window.clearTimeout(speechRecognitionRestartTimeoutRef.current);
+      speechRecognitionRestartTimeoutRef.current = null;
     }
 
     speechRecognitionRef.current?.stop();
@@ -1152,6 +1160,7 @@ export default function WhitelistPage() {
     setVoiceQuestMimeType('audio/webm');
     voiceChunksRef.current = [];
     voiceQuestCancelledRef.current = false;
+    speechRecognitionStoppingRef.current = false;
 
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -1217,21 +1226,40 @@ export default function WhitelistPage() {
         setVoiceQuestTranscript(nextTranscript);
       };
       recognition.onerror = (event) => {
+        if (event.error === 'aborted' || event.error === 'no-speech') {
+          return;
+        }
+
         setVoiceQuestWarning(`Voice recognition error: ${event.error}.`);
       };
       recognition.onend = () => {
-        if (mediaRecorderRef.current?.state === 'recording') {
+        if (
+          speechRecognitionStoppingRef.current ||
+          voiceQuestCancelledRef.current ||
+          mediaRecorderRef.current?.state !== 'recording'
+        ) {
+          return;
+        }
+
+        speechRecognitionRestartTimeoutRef.current = window.setTimeout(() => {
           try {
             recognition.start();
           } catch {
             // Avoid a noisy loop if the browser refuses an immediate restart.
           }
-        }
+        }, 250);
       };
+
+      try {
+        recognition.start();
+      } catch (error) {
+        if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') {
+          throw error;
+        }
+      }
 
       setVoiceQuestStatus('recording');
       RecorderCtor.start();
-      recognition.start();
     } catch (error) {
       console.error('Failed to start voice capture:', error);
       stopVoiceCapture();
@@ -1488,6 +1516,13 @@ export default function WhitelistPage() {
     }
 
     voiceQuestCancelledRef.current = false;
+    speechRecognitionStoppingRef.current = true;
+
+    if (speechRecognitionRestartTimeoutRef.current !== null) {
+      window.clearTimeout(speechRecognitionRestartTimeoutRef.current);
+      speechRecognitionRestartTimeoutRef.current = null;
+    }
+
     speechRecognitionRef.current?.stop();
     speechRecognitionRef.current = null;
 
@@ -2343,7 +2378,7 @@ Earn more points by completing quests and interacting with the protocol.
                             voiceQuestCountdown === 3
                               ? 'text-brand-red'
                               : voiceQuestCountdown === 2
-                                ? 'text-yellow-300'
+                                ? 'text-yellow-200'
                                 : 'text-green-400'
                           }`}
                         >
