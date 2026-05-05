@@ -15,6 +15,17 @@ interface ClaimQuestRewardResultRow {
   already_claimed?: boolean | null;
 }
 
+interface VoiceQuestStatusRow {
+  id?: number | string | null;
+}
+
+interface ClaimDailyVoiceQuestRewardResultRow {
+  total_points?: number | string | null;
+  added_points?: number | string | null;
+  daily_claim_count?: number | string | null;
+  remaining_claims?: number | string | null;
+}
+
 export interface WalletPointsEntry {
   walletAddress: string;
   totalPoints: number;
@@ -31,12 +42,36 @@ export interface ClaimQuestRewardResult {
   alreadyClaimed: boolean;
 }
 
+export interface VoiceQuestStatusResult {
+  completedToday: number;
+  remainingToday: number;
+  dailyLimit: number;
+}
+
+export interface ClaimDailyVoiceQuestRewardInput {
+  walletAddress: string;
+  questId: string;
+  pointsToAdd: number;
+  dailyLimit: number;
+  expectedText: string;
+  transcriptText: string;
+}
+
+export interface ClaimDailyVoiceQuestRewardResult {
+  totalPoints: number;
+  addedPoints: number;
+  completedToday: number;
+  remainingToday: number;
+}
+
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const DEFAULT_TABLE_NAME = 'wallet_points';
 const DEFAULT_WALLET_COLUMN = 'wallet_address';
 const DEFAULT_POINTS_COLUMN = 'total_points';
 const DEFAULT_ADD_POINTS_RPC = 'add_wallet_points';
 const DEFAULT_CLAIM_QUEST_REWARD_RPC = 'claim_testnet_quest_reward';
+const DEFAULT_VOICE_RECORDINGS_TABLE = 'testnet_voice_recordings';
+const DEFAULT_CLAIM_DAILY_VOICE_REWARD_RPC = 'claim_testnet_daily_voice_reward';
 const MISSING_CONFIG_ERROR =
   'Missing TESTNET_POINTS_SUPABASE_URL or TESTNET_POINTS_SUPABASE_SERVICE_ROLE_KEY in the environment.';
 
@@ -93,6 +128,16 @@ function getTestnetWalletPointsConfig() {
       process.env.TESTNET_CLAIM_QUEST_REWARD_RPC,
       DEFAULT_CLAIM_QUEST_REWARD_RPC,
       'TESTNET_CLAIM_QUEST_REWARD_RPC'
+    ),
+    voiceRecordingsTable: getIdentifier(
+      process.env.TESTNET_VOICE_RECORDINGS_TABLE,
+      DEFAULT_VOICE_RECORDINGS_TABLE,
+      'TESTNET_VOICE_RECORDINGS_TABLE'
+    ),
+    claimDailyVoiceRewardRpc: getIdentifier(
+      process.env.TESTNET_CLAIM_DAILY_VOICE_REWARD_RPC,
+      DEFAULT_CLAIM_DAILY_VOICE_REWARD_RPC,
+      'TESTNET_CLAIM_DAILY_VOICE_REWARD_RPC'
     ),
   };
 }
@@ -218,4 +263,101 @@ export async function claimQuestReward(
     addedPoints: Number(row?.added_points ?? 0),
     alreadyClaimed: Boolean(row?.already_claimed ?? false),
   } satisfies ClaimQuestRewardResult;
+}
+
+function getUtcDateRange() {
+  const now = new Date();
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+
+  return {
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  };
+}
+
+export async function getDailyVoiceQuestStatus(
+  walletAddress: string,
+  dailyLimit: number
+) {
+  const normalizedWalletAddress = walletAddress.toLowerCase();
+  const normalizedDailyLimit = Math.max(0, Math.trunc(dailyLimit));
+  const { voiceRecordingsTable } = getTestnetWalletPointsConfig();
+  const { startIso, endIso } = getUtcDateRange();
+  const response = await testnetWalletPointsFetch(
+    `/rest/v1/${voiceRecordingsTable}?select=id&wallet_address=eq.${encodeURIComponent(
+      normalizedWalletAddress
+    )}&claimed_at=gte.${encodeURIComponent(startIso)}&claimed_at=lt.${encodeURIComponent(
+      endIso
+    )}`,
+    {
+      method: 'GET',
+      headers: {
+        Prefer: 'count=exact',
+      },
+    }
+  );
+
+  const rows = (await response.json()) as VoiceQuestStatusRow[];
+  const completedToday = rows.length;
+
+  return {
+    completedToday,
+    remainingToday: Math.max(normalizedDailyLimit - completedToday, 0),
+    dailyLimit: normalizedDailyLimit,
+  } satisfies VoiceQuestStatusResult;
+}
+
+export async function claimDailyVoiceQuestReward(
+  input: ClaimDailyVoiceQuestRewardInput
+) {
+  const normalizedWalletAddress = input.walletAddress.toLowerCase();
+  const normalizedQuestId = input.questId.trim().toLowerCase();
+  const normalizedPointsToAdd = Math.trunc(input.pointsToAdd);
+  const normalizedDailyLimit = Math.max(0, Math.trunc(input.dailyLimit));
+  const { claimDailyVoiceRewardRpc } = getTestnetWalletPointsConfig();
+
+  if (!normalizedQuestId) {
+    throw new Error('Quest ID is required.');
+  }
+
+  if (normalizedPointsToAdd <= 0) {
+    throw new Error('Points to add must be greater than zero.');
+  }
+
+  if (normalizedDailyLimit <= 0) {
+    throw new Error('Daily limit must be greater than zero.');
+  }
+
+  const response = await testnetWalletPointsFetch(
+    `/rest/v1/rpc/${claimDailyVoiceRewardRpc}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        p_wallet_address: normalizedWalletAddress,
+        p_quest_id: normalizedQuestId,
+        p_points_to_add: normalizedPointsToAdd,
+        p_daily_limit: normalizedDailyLimit,
+        p_expected_text: input.expectedText.trim(),
+        p_transcript_text: input.transcriptText.trim(),
+      }),
+    }
+  );
+
+  const payload = (await response.json()) as
+    | ClaimDailyVoiceQuestRewardResultRow
+    | ClaimDailyVoiceQuestRewardResultRow[];
+  const row = Array.isArray(payload) ? payload[0] : payload;
+  const completedToday = Number(row?.daily_claim_count ?? 0);
+  const remainingToday = Number(row?.remaining_claims ?? 0);
+
+  return {
+    totalPoints: Number(row?.total_points ?? 0),
+    addedPoints: Number(row?.added_points ?? 0),
+    completedToday,
+    remainingToday,
+  } satisfies ClaimDailyVoiceQuestRewardResult;
 }
