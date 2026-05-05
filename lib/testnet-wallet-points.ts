@@ -72,11 +72,7 @@ const DEFAULT_ADD_POINTS_RPC = 'add_wallet_points';
 const DEFAULT_CLAIM_QUEST_REWARD_RPC = 'claim_testnet_quest_reward';
 const DEFAULT_VOICE_RECORDINGS_TABLE = 'testnet_voice_recordings';
 const DEFAULT_CLAIM_DAILY_VOICE_REWARD_RPC = 'claim_testnet_daily_voice_reward';
-const DEFAULT_VOICE_RECORDINGS_TIMESTAMP_COLUMNS = [
-  'claimed_at',
-  'created_at',
-  'recorded_at',
-] as const;
+const DEFAULT_GET_DAILY_VOICE_STATUS_RPC = 'get_testnet_daily_voice_status';
 const MISSING_CONFIG_ERROR =
   'Missing TESTNET_POINTS_SUPABASE_URL or TESTNET_POINTS_SUPABASE_SERVICE_ROLE_KEY in the environment.';
 
@@ -147,19 +143,28 @@ function getTestnetWalletPointsConfig() {
   };
 }
 
-function getVoiceQuestTimestampColumns() {
-  const configuredColumns = process.env.TESTNET_VOICE_RECORDINGS_TIMESTAMP_COLUMNS
-    ?.split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
+function getOptionalIdentifier(value: string | undefined, label: string) {
+  const normalized = value?.trim();
 
-  const values = configuredColumns?.length
-    ? [...configuredColumns, ...DEFAULT_VOICE_RECORDINGS_TIMESTAMP_COLUMNS]
-    : [...DEFAULT_VOICE_RECORDINGS_TIMESTAMP_COLUMNS];
+  if (!normalized) {
+    return null;
+  }
 
-  return values.filter(
-    (value, index, array) => IDENTIFIER_PATTERN.test(value) && array.indexOf(value) === index
-  );
+  if (!IDENTIFIER_PATTERN.test(normalized)) {
+    throw new Error(`Invalid Supabase identifier for ${label}.`);
+  }
+
+  return normalized;
+}
+
+function shouldUseVoiceQuestTranscriptFields() {
+  const value = process.env.TESTNET_VOICE_QUEST_SEND_TRANSCRIPT_FIELDS?.trim().toLowerCase();
+
+  if (!value) {
+    return false;
+  }
+
+  return !['0', 'false', 'no', 'off'].includes(value);
 }
 
 async function testnetWalletPointsFetch(path: string, init: RequestInit = {}) {
@@ -299,42 +304,75 @@ function getUtcDateRange() {
   };
 }
 
-async function getVoiceQuestStatusCountForColumn(
-  walletAddress: string,
-  voiceRecordingsTable: string,
-  timestampColumn: string,
-  startIso: string,
-  endIso: string
-) {
-  try {
-    const response = await testnetWalletPointsFetch(
-      `/rest/v1/${voiceRecordingsTable}?select=id&wallet_address=eq.${encodeURIComponent(
-        walletAddress
-      )}&${timestampColumn}=gte.${encodeURIComponent(startIso)}&${timestampColumn}=lt.${encodeURIComponent(
-        endIso
-      )}`,
-      {
-        method: 'GET',
-        headers: {
-          Prefer: 'count=exact',
-        },
-      }
-    );
+async function getDailyVoiceQuestStatusFromRpc(walletAddress: string, dailyLimit: number) {
+  const getDailyVoiceStatusRpc = getOptionalIdentifier(
+    process.env.TESTNET_GET_DAILY_VOICE_STATUS_RPC,
+    'TESTNET_GET_DAILY_VOICE_STATUS_RPC'
+  );
 
-    const rows = (await response.json()) as VoiceQuestStatusRow[];
-    return rows.length;
-  } catch (error) {
-    const message = error instanceof Error ? error.message.toLowerCase() : '';
-    const missingColumn =
-      message.includes(`column ${timestampColumn.toLowerCase()}`) &&
-      message.includes('does not exist');
-
-    if (missingColumn) {
-      return null;
-    }
-
-    throw error;
+  if (!getDailyVoiceStatusRpc) {
+    return null;
   }
+
+  const response = await testnetWalletPointsFetch(
+    `/rest/v1/rpc/${getDailyVoiceStatusRpc}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        p_wallet_address: walletAddress,
+        p_daily_limit: dailyLimit,
+      }),
+    }
+  );
+
+  const payload = (await response.json()) as
+    | ClaimDailyVoiceQuestRewardResultRow
+    | ClaimDailyVoiceQuestRewardResultRow[];
+  const row = Array.isArray(payload) ? payload[0] : payload;
+  const completedToday = Number(row?.daily_claim_count ?? 0);
+  const remainingToday = Number(row?.remaining_claims ?? Math.max(dailyLimit - completedToday, 0));
+
+  return {
+    completedToday,
+    remainingToday,
+    dailyLimit,
+  } satisfies VoiceQuestStatusResult;
+}
+
+async function getDailyVoiceQuestStatusFromRecordingsTable(
+  walletAddress: string,
+  dailyLimit: number
+) {
+  const configuredRecordingsTable = getOptionalIdentifier(
+    process.env.TESTNET_VOICE_RECORDINGS_TABLE,
+    'TESTNET_VOICE_RECORDINGS_TABLE'
+  );
+
+  if (!configuredRecordingsTable) {
+    return null;
+  }
+
+  const { startIso, endIso } = getUtcDateRange();
+  const response = await testnetWalletPointsFetch(
+    `/rest/v1/${configuredRecordingsTable}?select=id&wallet_address=eq.${encodeURIComponent(
+      walletAddress
+    )}&claimed_at=gte.${encodeURIComponent(startIso)}&claimed_at=lt.${encodeURIComponent(endIso)}`,
+    {
+      method: 'GET',
+      headers: {
+        Prefer: 'count=exact',
+      },
+    }
+  );
+
+  const rows = (await response.json()) as VoiceQuestStatusRow[];
+  const completedToday = rows.length;
+
+  return {
+    completedToday,
+    remainingToday: Math.max(dailyLimit - completedToday, 0),
+    dailyLimit,
+  } satisfies VoiceQuestStatusResult;
 }
 
 export async function getDailyVoiceQuestStatus(
@@ -343,32 +381,27 @@ export async function getDailyVoiceQuestStatus(
 ) {
   const normalizedWalletAddress = walletAddress.toLowerCase();
   const normalizedDailyLimit = Math.max(0, Math.trunc(dailyLimit));
-  const { voiceRecordingsTable } = getTestnetWalletPointsConfig();
-  const { startIso, endIso } = getUtcDateRange();
-  const timestampColumns = getVoiceQuestTimestampColumns();
-  let completedToday = 0;
+  const rpcStatus = await getDailyVoiceQuestStatusFromRpc(
+    normalizedWalletAddress,
+    normalizedDailyLimit
+  );
 
-  for (const timestampColumn of timestampColumns) {
-    const count = await getVoiceQuestStatusCountForColumn(
-      normalizedWalletAddress,
-      voiceRecordingsTable,
-      timestampColumn,
-      startIso,
-      endIso
-    );
+  if (rpcStatus) {
+    return rpcStatus;
+  }
 
-    if (typeof count === 'number') {
-      completedToday = Math.max(completedToday, count);
-    }
+  const tableStatus = await getDailyVoiceQuestStatusFromRecordingsTable(
+    normalizedWalletAddress,
+    normalizedDailyLimit
+  );
 
-    if (completedToday >= normalizedDailyLimit) {
-      break;
-    }
+  if (tableStatus) {
+    return tableStatus;
   }
 
   return {
-    completedToday,
-    remainingToday: Math.max(normalizedDailyLimit - completedToday, 0),
+    completedToday: 0,
+    remainingToday: normalizedDailyLimit,
     dailyLimit: normalizedDailyLimit,
   } satisfies VoiceQuestStatusResult;
 }
@@ -394,20 +427,50 @@ export async function claimDailyVoiceQuestReward(
     throw new Error('Daily limit must be greater than zero.');
   }
 
-  const response = await testnetWalletPointsFetch(
-    `/rest/v1/rpc/${claimDailyVoiceRewardRpc}`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        p_wallet_address: normalizedWalletAddress,
-        p_quest_id: normalizedQuestId,
-        p_points_to_add: normalizedPointsToAdd,
-        p_daily_limit: normalizedDailyLimit,
-        p_expected_text: input.expectedText.trim(),
-        p_transcript_text: input.transcriptText.trim(),
-      }),
+  const minimalPayload = {
+    p_wallet_address: normalizedWalletAddress,
+    p_quest_id: normalizedQuestId,
+    p_points_to_add: normalizedPointsToAdd,
+    p_daily_limit: normalizedDailyLimit,
+  };
+  const legacyPayload = {
+    ...minimalPayload,
+    p_expected_text: input.expectedText.trim(),
+    p_transcript_text: input.transcriptText.trim(),
+  };
+
+  let response: Response;
+
+  try {
+    response = await testnetWalletPointsFetch(
+      `/rest/v1/rpc/${claimDailyVoiceRewardRpc}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(
+          shouldUseVoiceQuestTranscriptFields() ? legacyPayload : minimalPayload
+        ),
+      }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    const expectsLegacyFields =
+      message.includes('p_expected_text') ||
+      message.includes('p_transcript_text') ||
+      message.includes('function') ||
+      message.includes('does not exist');
+
+    if (!shouldUseVoiceQuestTranscriptFields() && expectsLegacyFields) {
+      response = await testnetWalletPointsFetch(
+        `/rest/v1/rpc/${claimDailyVoiceRewardRpc}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(legacyPayload),
+        }
+      );
+    } else {
+      throw error;
     }
-  );
+  }
 
   const payload = (await response.json()) as
     | ClaimDailyVoiceQuestRewardResultRow
