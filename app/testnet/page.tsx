@@ -432,6 +432,7 @@ export default function WhitelistPage() {
   const [voiceQuestLanguageCode, setVoiceQuestLanguageCode] = useState(
     DEFAULT_VOICE_QUEST_LANGUAGE_CODE
   );
+  const [voiceQuestLanguageMenuOpen, setVoiceQuestLanguageMenuOpen] = useState(false);
   const [voiceQuestResolvedLanguageCode, setVoiceQuestResolvedLanguageCode] = useState(
     DEFAULT_VOICE_QUEST_LANGUAGE_CODE
   );
@@ -515,6 +516,9 @@ export default function WhitelistPage() {
   );
   const expectedTextUsesWhitespace = /\s/u.test(voiceQuestExpectedText);
   const requestedVoiceQuestLanguageCode = voiceQuestLanguageCode;
+  const selectedVoiceQuestLanguage =
+    VOICE_QUEST_LANGUAGE_OPTIONS.find((option) => option.value === voiceQuestLanguageCode) ??
+    VOICE_QUEST_LANGUAGE_OPTIONS[0];
   const matchedWordCount = getMatchedWordCount(
     normalizedExpectedWords,
     normalizedTranscriptWords
@@ -573,6 +577,7 @@ export default function WhitelistPage() {
     setVoiceQuestBlob(null);
     setVoiceQuestMimeType('audio/webm');
     setVoiceQuestExpectedText('');
+    setVoiceQuestLanguageMenuOpen(false);
     setVoiceQuestResolvedLanguageCode(requestedVoiceQuestLanguageCode);
     setVoiceQuestSentenceToken(null);
     setVoiceQuestClaimToken(null);
@@ -2545,25 +2550,66 @@ Earn more points by completing quests and interacting with the protocol.
                           Choose the language for the prompt and the live speech detector.
                         </p>
                       </div>
-                      <div className="w-full sm:max-w-[19rem]">
-                        <div className="rounded-2xl border border-white/10 bg-black/50 p-2">
-                          <select
-                            value={voiceQuestLanguageCode}
-                            onChange={(event) => setVoiceQuestLanguageCode(event.target.value)}
-                            size={Math.min(8, VOICE_QUEST_LANGUAGE_OPTIONS.length)}
-                            className="h-[15.5rem] w-full appearance-none rounded-xl bg-transparent px-2 py-1 text-sm font-semibold text-white outline-none"
-                          >
-                            {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => (
-                              <option
-                                key={option.value}
-                                value={option.value}
-                                className="rounded-lg bg-[#120404] px-3 py-2 text-white"
-                              >
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                      <div className="relative w-full sm:max-w-[19rem]">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setVoiceQuestLanguageMenuOpen((currentValue) => !currentValue)
+                          }
+                          className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-4 py-3 text-left transition-all hover:border-[#ff8f8f]/30 hover:bg-white/[0.08]"
+                        >
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
+                              Selected
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-white">
+                              {selectedVoiceQuestLanguage.label}
+                            </p>
+                          </div>
+                          <ChevronRight
+                            className={`h-4 w-4 text-white/50 transition-transform duration-200 ${
+                              voiceQuestLanguageMenuOpen ? 'rotate-90' : ''
+                            }`}
+                          />
+                        </button>
+
+                        {voiceQuestLanguageMenuOpen ? (
+                          <div className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-20 overflow-hidden rounded-[20px] border border-[#6a1b1b]/50 bg-[linear-gradient(180deg,rgba(27,7,7,0.98),rgba(12,5,5,0.98))] shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                            <div className="border-b border-white/10 px-4 py-3">
+                              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
+                                Available Languages
+                              </p>
+                            </div>
+                            <div className="max-h-64 overflow-y-auto p-2">
+                              {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => {
+                                const isSelected = option.value === voiceQuestLanguageCode;
+
+                                return (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => {
+                                      setVoiceQuestLanguageCode(option.value);
+                                      setVoiceQuestLanguageMenuOpen(false);
+                                    }}
+                                    className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition-all ${
+                                      isSelected
+                                        ? 'bg-[#4a0a0a] text-white'
+                                        : 'text-white/72 hover:bg-white/[0.06] hover:text-white'
+                                    }`}
+                                  >
+                                    <span className="font-semibold">{option.label}</span>
+                                    {isSelected ? (
+                                      <span className="rounded-full border border-[#ff8f8f]/30 bg-[#5f1111] px-2 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#ffd0d0]">
+                                        Live
+                                      </span>
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>

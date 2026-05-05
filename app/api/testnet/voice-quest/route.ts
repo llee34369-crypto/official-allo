@@ -17,6 +17,7 @@ import {
 } from '@/lib/testnet-voice-quest-desktop-sign';
 import {
   createVoiceQuestClaimToken,
+  doesVoiceQuestTranscriptMatchExpected,
   createVoiceQuestSentence,
   getNormalizedVoiceQuestText,
   verifyVoiceQuestClaimToken,
@@ -198,8 +199,15 @@ export async function POST(request: Request) {
       const normalizedExpectedText = getNormalizedVoiceQuestText(
         sentencePayload.expectedText
       );
+      const transcriptMatchesExpected = doesVoiceQuestTranscriptMatchExpected(
+        transcript,
+        sentencePayload.expectedText
+      );
 
-      if (normalizedTranscript !== normalizedExpectedText) {
+      if (
+        normalizedTranscript !== normalizedExpectedText &&
+        !transcriptMatchesExpected
+      ) {
         return NextResponse.json(
           { error: 'The recording did not match the required sentence.' },
           { status: 400 }

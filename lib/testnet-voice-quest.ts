@@ -72,6 +72,11 @@ function normalizeText(value: string) {
     .trim();
 }
 
+function getNormalizedWords(value: string) {
+  const normalized = normalizeText(value);
+  return normalized ? normalized.split(' ').filter(Boolean) : [];
+}
+
 function normalizeLanguageCode(value: string | null | undefined) {
   const fallback = DEFAULT_LANGUAGE_CODE;
   const trimmed = typeof value === 'string' ? value.trim() : '';
@@ -231,4 +236,38 @@ export function verifyVoiceQuestClaimToken(token: string, walletAddress: string)
 
 export function getNormalizedVoiceQuestText(value: string) {
   return normalizeText(value);
+}
+
+export function doesVoiceQuestTranscriptMatchExpected(
+  transcriptText: string,
+  expectedText: string
+) {
+  const expectedWords = getNormalizedWords(expectedText);
+  const transcriptWords = getNormalizedWords(transcriptText);
+
+  if (!expectedWords.length || !transcriptWords.length) {
+    return false;
+  }
+
+  let matchedWordCount = 0;
+
+  for (const transcriptWord of transcriptWords) {
+    if (transcriptWord === expectedWords[matchedWordCount]) {
+      matchedWordCount += 1;
+
+      if (matchedWordCount >= expectedWords.length) {
+        return true;
+      }
+
+      continue;
+    }
+
+    matchedWordCount = transcriptWord === expectedWords[0] ? 1 : 0;
+
+    if (matchedWordCount >= expectedWords.length) {
+      return true;
+    }
+  }
+
+  return false;
 }
