@@ -138,6 +138,7 @@ interface SpeechRecognition extends EventTarget {
   interimResults: boolean;
   lang: string;
   maxAlternatives?: number;
+  onstart: (() => void) | null;
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
   onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
@@ -222,6 +223,23 @@ const VOICE_QUEST_LANGUAGE_OPTIONS = [
 ] as const;
 const getWalletSessionStorageKey = (walletAddress: string) =>
   `speakerai:testnet-session:${normalizeWalletAddress(walletAddress)}`;
+const getSpeechRecognitionLanguageFallbacks = (preferredLanguageCode: string) => {
+  const normalizedPreferredLanguageCode = preferredLanguageCode.trim();
+  const browserLanguage =
+    typeof navigator !== 'undefined' ? navigator.language?.trim() || '' : '';
+  const fallbackCandidates = [
+    normalizedPreferredLanguageCode,
+    normalizedPreferredLanguageCode.split('-')[0] || '',
+    browserLanguage,
+    browserLanguage.split('-')[0] || '',
+    DEFAULT_VOICE_QUEST_LANGUAGE_CODE,
+    'en',
+  ];
+
+  return fallbackCandidates.filter(
+    (value, index, values) => value && values.indexOf(value) === index
+  );
+};
 const normalizeSpeechText = (value: string) =>
   value
     .normalize('NFKD')
@@ -1321,20 +1339,33 @@ export default function WhitelistPage() {
     voiceRecognitionActiveRef.current = true;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: selectedAudioInputId
-          ? {
-              deviceId: { exact: selectedAudioInputId },
-              autoGainControl: true,
-              echoCancellation: true,
-              noiseSuppression: true,
-            }
-          : {
-              autoGainControl: true,
-              echoCancellation: true,
-              noiseSuppression: true,
-            },
-      });
+      let stream: MediaStream;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: selectedAudioInputId
+            ? {
+                deviceId: { exact: selectedAudioInputId },
+                autoGainControl: true,
+                echoCancellation: true,
+                noiseSuppression: true,
+              }
+            : {
+                autoGainControl: true,
+                echoCancellation: true,
+                noiseSuppression: true,
+              },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            autoGainControl: true,
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+      }
+
       mediaStreamRef.current = stream;
       voiceChunksRef.current = [];
 
@@ -1389,7 +1420,14 @@ export default function WhitelistPage() {
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
-      recognition.lang = voiceQuestResolvedLanguageCode || requestedVoiceQuestLanguageCode;
+      const recognitionLanguageFallbacks = getSpeechRecognitionLanguageFallbacks(
+        voiceQuestResolvedLanguageCode || requestedVoiceQuestLanguageCode
+      );
+      let recognitionLanguageIndex = 0;
+      recognition.lang = recognitionLanguageFallbacks[recognitionLanguageIndex];
+      recognition.onstart = () => {
+        setVoiceQuestWarning(null);
+      };
       recognition.onresult = (event) => {
         let finalTranscript = speechRecognitionFinalTranscriptRef.current;
         let interimTranscript = '';
@@ -1413,7 +1451,28 @@ export default function WhitelistPage() {
         setVoiceQuestTranscript(`${finalTranscript} ${interimTranscript}`.trim());
       };
       recognition.onerror = (event) => {
-        if (event.error === 'aborted' || event.error === 'no-speech') {
+        if (event.error === 'aborted') {
+          return;
+        }
+
+        if (
+          (event.error === 'language-not-supported' || event.error === 'service-not-allowed') &&
+          recognitionLanguageIndex < recognitionLanguageFallbacks.length - 1
+        ) {
+          recognitionLanguageIndex += 1;
+          recognition.lang = recognitionLanguageFallbacks[recognitionLanguageIndex];
+
+          try {
+            recognition.stop();
+          } catch {
+            // Ignore stop failures while switching language fallback.
+          }
+
+          return;
+        }
+
+        if (event.error === 'no-speech') {
+          setVoiceQuestWarning('No speech detected yet. Speak clearly and keep the microphone close.');
           return;
         }
 
