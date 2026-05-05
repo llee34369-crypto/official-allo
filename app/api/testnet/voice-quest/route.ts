@@ -13,6 +13,9 @@ import {
   isTestnetWalletPointsConfigured,
 } from '@/lib/testnet-wallet-points';
 import {
+  markPendingDesktopVoiceQuestSignClaimed,
+} from '@/lib/testnet-voice-quest-desktop-sign';
+import {
   createVoiceQuestClaimToken,
   createVoiceQuestSentence,
   getNormalizedVoiceQuestText,
@@ -262,6 +265,7 @@ export async function POST(request: Request) {
         expectedText: claimPayload.expectedText,
         transcriptText: claimPayload.transcriptText ?? claimPayload.expectedText,
       });
+      markPendingDesktopVoiceQuestSignClaimed(walletAddress, claimToken);
 
       return NextResponse.json({
         ok: true,

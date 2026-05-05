@@ -113,6 +113,17 @@ interface VoiceQuestClaimResponse {
   status?: string;
 }
 
+interface VoiceQuestDesktopSignResponse {
+  error?: string;
+  ok?: boolean;
+  status?: string;
+  requestId?: string | null;
+  pending?: boolean;
+  claimed?: boolean;
+  claimToken?: string | null;
+  expectedText?: string | null;
+}
+
 declare global {
   interface Window {
     SpeechRecognition?: new () => SpeechRecognition;
@@ -193,6 +204,22 @@ const getMatchedWordCount = (expectedWords: string[], spokenWords: string[]) => 
   return count;
 };
 
+const getWordProgressState = (
+  index: number,
+  matchedWordCount: number,
+  status: string
+) => {
+  if (index < matchedWordCount) {
+    return 'matched';
+  }
+
+  if (index === matchedWordCount && status === 'recording') {
+    return 'active';
+  }
+
+  return 'pending';
+};
+
 const SPK_WALLET_CONNECTOR_IDS = [
   'cfhicbdppkipecleloppbdmakjocgnoi',
 ]
@@ -255,6 +282,7 @@ export default function WhitelistPage() {
     | 'recording'
     | 'verifying'
     | 'verified'
+    | 'awaiting_desktop_signature'
     | 'signing'
     | 'success'
   >('idle');
@@ -283,8 +311,12 @@ export default function WhitelistPage() {
   const [walletSessionToken, setWalletSessionToken] = useState<string | null>(null);
   const [mobileWalletSessionToken, setMobileWalletSessionToken] = useState('');
   const [mobileSessionWalletAddress, setMobileSessionWalletAddress] = useState('');
+  const [pendingDesktopVoiceQuestRequestId, setPendingDesktopVoiceQuestRequestId] = useState<
+    string | null
+  >(null);
   const mobileVoiceQuestPromptedRef = useRef(false);
   const mobileVoiceQuestOpenedRef = useRef(false);
+  const desktopVoiceQuestRequestHandledRef = useRef<string | null>(null);
   const spkConnector = connectors.find((connector) =>
     matchesSpkWallet({
       id: connector.id,
@@ -307,6 +339,9 @@ export default function WhitelistPage() {
       mobileSessionWalletAddress &&
       mobileWalletSessionToken &&
       walletVerifiedForSession
+  );
+  const shouldSignVoiceQuestOnDesktop = Boolean(
+    hasSessionBackedMobileFlow && !canClaimSpkWalletQuest
   );
   const normalizedConnectedAddress = address ? normalizeWalletAddress(address) : '';
   const normalizedMobileVoiceQuestWallet = mobileVoiceQuestWallet
@@ -378,6 +413,7 @@ export default function WhitelistPage() {
     setVoiceQuestExpectedText('');
     setVoiceQuestSentenceToken(null);
     setVoiceQuestClaimToken(null);
+    setPendingDesktopVoiceQuestRequestId(null);
     voiceChunksRef.current = [];
   };
 
@@ -413,6 +449,11 @@ export default function WhitelistPage() {
 
     return payload;
   };
+
+  const wait = (ms: number) =>
+    new Promise<void>((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
 
   const claimSpkWalletQuest = async () => {
     if (!(address && canClaimSpkWalletQuest)) {
@@ -492,6 +533,7 @@ export default function WhitelistPage() {
   useEffect(() => {
     if (!(isConnected && address && isConnectedWithSpkWallet)) {
       connectedQuestWalletRef.current = null;
+      desktopVoiceQuestRequestHandledRef.current = null;
 
       if (hasSessionBackedMobileFlow) {
         return;
@@ -518,6 +560,7 @@ export default function WhitelistPage() {
 
     if (isNewConnectedWallet) {
       connectedQuestWalletRef.current = normalizedAddress;
+      desktopVoiceQuestRequestHandledRef.current = null;
       setDownloadSpkWalletQuestClaimed(false);
       setWalletVerifiedForSession(false);
       setWalletSessionToken(null);
@@ -1165,8 +1208,9 @@ export default function WhitelistPage() {
       recognition.interimResults = true;
       recognition.lang = 'en-US';
       recognition.onresult = (event) => {
-        const nextTranscript = Array.from({ length: event.results.length })
-          .map((_, index) => event.results[index]?.[0]?.transcript ?? '')
+        const nextTranscript = Array.from({ length: event.results.length }, (_, index) =>
+          event.results[index]?.[0]?.transcript ?? ''
+        )
           .join(' ')
           .trim();
 
@@ -1316,6 +1360,128 @@ export default function WhitelistPage() {
     normalizedMobileVoiceQuestWallet,
   ]);
 
+  useEffect(() => {
+    if (!(address && canClaimSpkWalletQuest && walletVerifiedForSession && walletSessionToken)) {
+      return;
+    }
+
+    let disposed = false;
+
+    const pollDesktopVoiceQuestSign = async () => {
+      try {
+        const response = await fetch(
+          `/api/testnet/voice-quest-desktop-sign?address=${encodeURIComponent(
+            address
+          )}&sessionToken=${encodeURIComponent(walletSessionToken)}`,
+          {
+            method: 'GET',
+            cache: 'no-store',
+          }
+        );
+
+        const payload = (await response.json()) as VoiceQuestDesktopSignResponse | undefined;
+
+        if (!response.ok || payload?.ok !== true || !payload.pending || !payload.claimToken) {
+          return;
+        }
+
+        const requestId = payload.requestId?.trim() || '';
+
+        if (!requestId || desktopVoiceQuestRequestHandledRef.current === requestId) {
+          return;
+        }
+
+        desktopVoiceQuestRequestHandledRef.current = requestId;
+        setVoiceQuestOpen(true);
+        setVoiceQuestWarning(null);
+        const expectedText = payload.expectedText?.trim() || '';
+        const claimToken = payload.claimToken.trim();
+        setVoiceQuestExpectedText(expectedText);
+        setVoiceQuestClaimToken(claimToken);
+        setVoiceQuestStatus('signing');
+        void claimVerifiedVoiceQuest({ claimToken, expectedText });
+      } catch (error) {
+        console.error('Failed to load pending desktop voice quest signature:', error);
+      }
+    };
+
+    void pollDesktopVoiceQuestSign();
+    const intervalId = window.setInterval(() => {
+      if (!disposed) {
+        void pollDesktopVoiceQuestSign();
+      }
+    }, 2500);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [
+    address,
+    canClaimSpkWalletQuest,
+    walletSessionToken,
+    walletVerifiedForSession,
+  ]);
+
+  useEffect(() => {
+    if (
+      !(
+        voiceQuestOpen &&
+        voiceQuestStatus === 'awaiting_desktop_signature' &&
+        activeQuestWalletAddress &&
+        mobileWalletSessionToken
+      )
+    ) {
+      return;
+    }
+
+    let disposed = false;
+
+    const pollDesktopVoiceQuestCompletion = async () => {
+      try {
+        const response = await fetch(
+          `/api/testnet/voice-quest-desktop-sign?address=${encodeURIComponent(
+            activeQuestWalletAddress
+          )}&sessionToken=${encodeURIComponent(mobileWalletSessionToken)}`,
+          {
+            method: 'GET',
+            cache: 'no-store',
+          }
+        );
+
+        const payload = (await response.json()) as VoiceQuestDesktopSignResponse | undefined;
+
+        if (!response.ok || payload?.ok !== true || !payload.claimed || disposed) {
+          return;
+        }
+
+        setVoiceQuestStatus('success');
+        autoCloseTimeoutRef.current = window.setTimeout(() => {
+          closeVoiceQuestModal();
+        }, 1400);
+      } catch (error) {
+        console.error('Failed to check desktop voice quest completion:', error);
+      }
+    };
+
+    void pollDesktopVoiceQuestCompletion();
+    const intervalId = window.setInterval(() => {
+      if (!disposed) {
+        void pollDesktopVoiceQuestCompletion();
+      }
+    }, 2500);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [
+    activeQuestWalletAddress,
+    mobileWalletSessionToken,
+    voiceQuestOpen,
+    voiceQuestStatus,
+  ]);
+
   const stopVoiceRecording = () => {
     if (voiceQuestStatus !== 'recording') {
       return;
@@ -1418,8 +1584,39 @@ export default function WhitelistPage() {
         throw new Error(payload?.error || 'Unable to verify the voice recording.');
       }
 
+      await wait(5000);
+
       setVoiceQuestClaimToken(payload.claimToken?.trim() || null);
       setVoiceQuestExpectedText(payload.expectedText?.trim() || voiceQuestExpectedText);
+
+      if (shouldSignVoiceQuestOnDesktop && mobileWalletSessionToken) {
+        const desktopSignResponse = await fetch('/api/testnet/voice-quest-desktop-sign', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            walletAddress: activeQuestWalletAddress,
+            claimToken: payload.claimToken?.trim() || '',
+            sessionToken: mobileWalletSessionToken,
+            expectedText: payload.expectedText?.trim() || voiceQuestExpectedText,
+          }),
+        });
+
+        const desktopSignPayload =
+          (await desktopSignResponse.json()) as VoiceQuestDesktopSignResponse | undefined;
+
+        if (!desktopSignResponse.ok || desktopSignPayload?.ok !== true) {
+          throw new Error(
+            desktopSignPayload?.error || 'Unable to hand off the signature request to desktop.'
+          );
+        }
+
+        setPendingDesktopVoiceQuestRequestId(desktopSignPayload.requestId?.trim() || null);
+        setVoiceQuestStatus('awaiting_desktop_signature');
+        return;
+      }
+
       setVoiceQuestStatus('verified');
     } catch (error) {
       setVoiceQuestWarning(
@@ -1429,13 +1626,19 @@ export default function WhitelistPage() {
     }
   };
 
-  const claimVerifiedVoiceQuest = async () => {
+  const claimVerifiedVoiceQuest = async (overrides?: {
+    claimToken?: string;
+    expectedText?: string;
+  }) => {
     if (!activeQuestWalletAddress || !hasUnlockedTestnetPage) {
       setVoiceQuestWarning('Sign in with your SPK Wallet first.');
       return;
     }
 
-    if (!voiceQuestBlob || !voiceQuestClaimToken) {
+    const claimToken = overrides?.claimToken?.trim() || voiceQuestClaimToken;
+    const expectedText = overrides?.expectedText?.trim() || voiceQuestExpectedText;
+
+    if (!claimToken) {
       setVoiceQuestWarning('Verify your recording first.');
       return;
     }
@@ -1449,17 +1652,18 @@ export default function WhitelistPage() {
           ? await signMessageAsync({
               message: getDailyVoiceQuestOwnershipMessage(
                 activeQuestWalletAddress,
-                voiceQuestExpectedText
+                expectedText
               ),
             })
           : undefined;
 
-      const audioBuffer = await voiceQuestBlob.arrayBuffer();
-      const audioBase64 = btoa(
-        Array.from(new Uint8Array(audioBuffer))
-          .map((value) => String.fromCharCode(value))
-          .join('')
-      );
+      const audioBase64 = voiceQuestBlob
+        ? btoa(
+            Array.from(new Uint8Array(await voiceQuestBlob.arrayBuffer()))
+              .map((value) => String.fromCharCode(value))
+              .join('')
+          )
+        : '';
 
       const response = await fetch('/api/testnet/voice-quest', {
         method: 'POST',
@@ -1470,10 +1674,10 @@ export default function WhitelistPage() {
           action: 'claim',
           walletAddress: activeQuestWalletAddress,
           signature,
-          claimToken: voiceQuestClaimToken,
+          claimToken,
           sessionToken: !signature ? mobileWalletSessionToken : undefined,
           audioBase64,
-          audioMimeType: voiceQuestMimeType,
+          audioMimeType: voiceQuestBlob ? voiceQuestMimeType : '',
         }),
       });
 
@@ -1742,7 +1946,7 @@ Earn more points by completing quests and interacting with the protocol.
                               <div className="min-w-0">
                                 <p className="text-sm font-bold text-white">Complete daily voice record</p>
                                 <p className="mt-1 text-xs leading-relaxed text-white/50">
-                                  Read the sentence, record your mic, verify the exact words, and sign with your SPK Wallet. Limited to 5 times per day.
+                                  Read the sentence, record your mic, verify the exact words, and earn +2 SP per successful record. Limited to 5 times per day.
                                 </p>
                                 <p className="mt-2 text-[11px] font-semibold text-white/45">
                                   Completed today: {voiceQuestCompletedToday} / {DAILY_VOICE_RECORD_QUEST_DAILY_LIMIT}
@@ -2119,6 +2323,8 @@ Earn more points by completing quests and interacting with the protocol.
                           ? 'Recording'
                           : voiceQuestStatus === 'verifying'
                             ? 'Verifying'
+                            : voiceQuestStatus === 'awaiting_desktop_signature'
+                              ? 'Desktop Sign'
                             : voiceQuestStatus === 'verified'
                               ? 'Verified'
                               : voiceQuestStatus === 'signing'
@@ -2147,6 +2353,19 @@ Earn more points by completing quests and interacting with the protocol.
                         <div className="flex flex-col items-center gap-5 text-white">
                           <LoaderCircle className="h-8 w-8 animate-spin text-brand-red-glow sm:h-10 sm:w-10" />
                           <p className="font-display text-3xl font-black tracking-tight sm:text-4xl">Verifying</p>
+                          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/50">
+                            Preparing reward check
+                          </p>
+                        </div>
+                      ) : voiceQuestStatus === 'awaiting_desktop_signature' ? (
+                        <div className="flex flex-col items-center gap-5 text-white">
+                          <LoaderCircle className="h-8 w-8 animate-spin text-brand-red-glow sm:h-10 sm:w-10" />
+                          <p className="font-display text-2xl font-black tracking-tight text-center sm:text-4xl">
+                            Waiting For Desktop Signature
+                          </p>
+                          <p className="max-w-md text-center text-sm leading-relaxed text-white/60">
+                            Your recording is verified. Open the signed-in desktop session to approve the reward.
+                          </p>
                         </div>
                       ) : voiceQuestStatus === 'signing' ? (
                         <div className="flex flex-col items-center gap-5 text-white">
@@ -2170,29 +2389,83 @@ Earn more points by completing quests and interacting with the protocol.
                       ) : voiceQuestStatus === 'success' ? (
                         <p className="font-display text-4xl font-black tracking-tight text-white sm:text-5xl">Done</p>
                       ) : (
-                        <p className="max-w-[32rem] text-lg font-semibold leading-[1.85] tracking-[0.01em] text-white sm:text-[30px] sm:leading-[1.9]">
-                          {voiceQuestExpectedText.split(' ').map((word, index) => {
-                            const isMatched = index < matchedWordCount;
-                            const isActive =
-                              index === matchedWordCount && voiceQuestStatus === 'recording';
+                        <div className="w-full max-w-[38rem]">
+                          <p className="max-w-[32rem] text-lg font-semibold leading-[1.85] tracking-[0.01em] text-white sm:text-[30px] sm:leading-[1.9]">
+                            {voiceQuestExpectedText.split(' ').map((word, index, words) => {
+                              const progressState = getWordProgressState(
+                                index,
+                                matchedWordCount,
+                                voiceQuestStatus
+                              );
 
-                            return (
-                              <span
-                                key={`${word}-${index}`}
-                                className={`inline rounded-lg px-1.5 py-1 transition-all duration-300 sm:rounded-xl sm:px-2 ${
-                                  isMatched
-                                    ? 'bg-brand-red text-white shadow-[0_0_30px_rgba(180,35,35,0.35)]'
-                                    : isActive
-                                      ? 'bg-[#2a0606] text-white ring-1 ring-[#ff8f8f]/70'
-                                      : 'text-white'
-                                }`}
-                              >
-                                {word}
-                                {index < voiceQuestExpectedText.split(' ').length - 1 ? ' ' : ''}
+                              return (
+                                <span
+                                  key={`${word}-${index}`}
+                                  className={`inline rounded-lg px-1.5 py-1 transition-all duration-300 sm:rounded-xl sm:px-2 ${
+                                    progressState === 'matched'
+                                      ? 'bg-emerald-500 text-white shadow-[0_0_30px_rgba(16,185,129,0.35)]'
+                                      : progressState === 'active'
+                                        ? 'bg-[#2a0606] text-white ring-1 ring-[#ff8f8f]/70'
+                                        : 'text-white'
+                                  }`}
+                                >
+                                  {word}
+                                  {index < words.length - 1 ? ' ' : ''}
+                                </span>
+                              );
+                            })}
+                          </p>
+
+                          <div className="mt-5 rounded-[20px] border border-white/10 bg-[#090909] px-4 py-4 text-left">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                                Detector Hears
                               </span>
-                            );
-                          })}
-                        </p>
+                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/50">
+                                {voiceQuestStatus === 'recording' ? 'Live' : 'Preview'}
+                              </span>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {(normalizedTranscriptWords.length
+                                ? normalizedTranscriptWords
+                                : ['Waiting for speech...']
+                              ).map((word, index) => {
+                                const isPlaceholder = !normalizedTranscriptWords.length;
+                                const isCorrect =
+                                  !isPlaceholder &&
+                                  index < matchedWordCount &&
+                                  normalizedExpectedWords[index] === word;
+                                const isCurrent =
+                                  !isPlaceholder && index === matchedWordCount;
+
+                                return (
+                                  <span
+                                    key={`${word}-${index}`}
+                                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-all ${
+                                      isPlaceholder
+                                        ? 'border border-white/10 bg-white/[0.04] text-white/35'
+                                        : isCorrect
+                                          ? 'border border-emerald-400/30 bg-emerald-500/15 text-emerald-300'
+                                          : isCurrent
+                                            ? 'border border-[#ff8f8f]/30 bg-[#3a0d0d] text-[#ffd5d5]'
+                                            : 'border border-white/10 bg-white/[0.04] text-white/55'
+                                    }`}
+                                  >
+                                    {word}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            {voiceQuestStatus === 'recording' && normalizedExpectedWords.length ? (
+                              <p className="mt-3 text-xs leading-relaxed text-white/45">
+                                Next word:{' '}
+                                <span className="font-black uppercase tracking-[0.18em] text-emerald-300">
+                                  {normalizedExpectedWords[matchedWordCount] ?? 'Complete'}
+                                </span>
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
