@@ -18,8 +18,29 @@ interface VoiceQuestSentenceParts {
   endings: string[];
 }
 
+type VoiceQuestSentenceTemplate = (
+  opening: string,
+  middle: string,
+  qualifier: string,
+  ending: string
+) => string;
+
 const TOKEN_DURATION_MS = 15 * 60 * 1000;
 const DEFAULT_LANGUAGE_CODE = 'en-US';
+const VOICE_QUEST_SENTENCE_TEMPLATES: VoiceQuestSentenceTemplate[] = [
+  (opening, middle, qualifier, ending) =>
+    `${opening} ${middle} ${qualifier} ${ending}`,
+  (opening, middle, qualifier, ending) =>
+    `${opening} ${middle} ${ending} ${qualifier}`,
+  (opening, middle, qualifier, ending) =>
+    `${opening} ${qualifier} ${middle} ${ending}`,
+  (opening, middle, qualifier, ending) =>
+    `${opening} ${qualifier} ${ending} ${middle}`,
+  (opening, middle, qualifier, ending) =>
+    `${opening} ${middle} ${qualifier}, ${ending}`,
+  (opening, middle, qualifier, ending) =>
+    `${opening} ${middle} ${ending}, ${qualifier}`,
+];
 
 const SAFE_VOICE_QUEST_SENTENCE_PARTS: Record<string, VoiceQuestSentenceParts> = {
   ar: {
@@ -242,7 +263,7 @@ function resolveVoiceQuestLanguage(languageCode: string | null | undefined) {
   };
 }
 
-function pickRandomValue(values: string[]) {
+function pickRandomValue<T>(values: T[]) {
   return values[Math.floor(Math.random() * values.length)];
 }
 
@@ -306,12 +327,15 @@ export function createVoiceQuestSentence(
 ) {
   const normalizedWalletAddress = normalizeWallet(walletAddress);
   const { languageCode, parts } = resolveVoiceQuestLanguage(requestedLanguageCode);
-  const expectedText = [
+  const template = pickRandomValue(VOICE_QUEST_SENTENCE_TEMPLATES);
+  const expectedText = template(
     pickRandomValue(parts.openings),
     pickRandomValue(parts.middles),
     pickRandomValue(parts.qualifiers),
-    pickRandomValue(parts.endings),
-  ].join(' ');
+    pickRandomValue(parts.endings)
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
 
   const payload: SignedVoiceQuestTokenPayload = {
     type: 'voice_sentence',

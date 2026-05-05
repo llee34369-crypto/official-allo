@@ -272,6 +272,18 @@ export async function POST(request: Request) {
         );
       }
 
+      const status = await getDailyVoiceQuestStatus(
+        walletAddress,
+        DAILY_VOICE_RECORD_QUEST_DAILY_LIMIT
+      );
+
+      if (status.remainingToday <= 0) {
+        return NextResponse.json(
+          { error: 'Daily limit reached for voice recordings.' },
+          { status: 409 }
+        );
+      }
+
       const claimResult = await claimDailyVoiceQuestReward({
         walletAddress,
         questId: DAILY_VOICE_RECORD_QUEST_ID,

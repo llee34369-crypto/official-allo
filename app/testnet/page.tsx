@@ -1175,8 +1175,7 @@ export default function WhitelistPage() {
     if (
       !mobileVoiceQuestRequested ||
       !normalizedMobileVoiceQuestWallet ||
-      !mobileWalletSessionToken ||
-      canClaimSpkWalletQuest
+      !mobileWalletSessionToken
     ) {
       return;
     }
@@ -1204,6 +1203,8 @@ export default function WhitelistPage() {
 
         setMobileSessionWalletAddress(normalizedMobileVoiceQuestWallet);
         setWalletVerifiedForSession(true);
+        setWalletSessionToken(mobileWalletSessionToken);
+        setDownloadSpkWalletQuestClaimed(true);
         setQuestClaimStatus('claimed');
         setQuestClaimWarning(null);
       } catch (error) {
@@ -1223,7 +1224,6 @@ export default function WhitelistPage() {
       abortController.abort();
     };
   }, [
-    canClaimSpkWalletQuest,
     mobileVoiceQuestRequested,
     mobileWalletSessionToken,
     normalizedMobileVoiceQuestWallet,
@@ -2511,14 +2511,14 @@ Earn more points by completing quests and interacting with the protocol.
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                    Daily Limit
+                    Left Today
                   </span>
                   <span className="font-display text-3xl font-black tracking-tight text-white">
                     {voiceQuestRemainingToday}
                   </span>
                 </div>
                 <span className="rounded-full border border-[#ff7c7c]/20 bg-[#6d0e0e]/30 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-[#ffb0b0]">
-                  +{voiceQuestPoints} SP
+                  Earn +{voiceQuestPoints} SP
                 </span>
               </div>
 
@@ -2604,13 +2604,27 @@ Earn more points by completing quests and interacting with the protocol.
                         </button>
 
                         {voiceQuestLanguageMenuOpen ? (
-                          <div className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-20 overflow-hidden rounded-[20px] border border-[#6a1b1b]/50 bg-[linear-gradient(180deg,rgba(27,7,7,0.98),rgba(12,5,5,0.98))] shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                          <div className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-20 overflow-hidden rounded-[20px] border border-[#6a1b1b]/50 bg-[linear-gradient(180deg,rgba(27,7,7,0.98),rgba(12,5,5,0.98))] shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:rounded-[20px]">
                             <div className="border-b border-white/10 px-4 py-3">
-                              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
-                                Available Languages
-                              </p>
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
+                                    Available Languages
+                                  </p>
+                                  <p className="mt-1 text-xs text-white/45 sm:hidden">
+                                    Choose one option and continue the quest.
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setVoiceQuestLanguageMenuOpen(false)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/55"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </div>
-                            <div className="max-h-64 overflow-y-auto p-2">
+                            <div className="max-h-[18rem] overflow-y-auto p-2 sm:max-h-64">
                               {VOICE_QUEST_LANGUAGE_OPTIONS.map((option) => {
                                 const isSelected = option.value === voiceQuestLanguageCode;
 
@@ -2630,9 +2644,7 @@ Earn more points by completing quests and interacting with the protocol.
                                   >
                                     <span className="font-semibold">{option.label}</span>
                                     {isSelected ? (
-                                      <span className="rounded-full border border-[#ff8f8f]/30 bg-[#5f1111] px-2 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#ffd0d0]">
-                                        Live
-                                      </span>
+                                      <CheckCircle2 className="h-4 w-4 text-emerald-300" />
                                     ) : null}
                                   </button>
                                 );
@@ -2805,9 +2817,7 @@ Earn more points by completing quests and interacting with the protocol.
                                   Detector Hears
                                 </span>
                                 <span className="inline-flex w-fit rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/50">
-                                  {voiceQuestStatus === 'recording'
-                                    ? `Live • ${voiceQuestResolvedLanguageCode}`
-                                    : `Preview • ${voiceQuestResolvedLanguageCode}`}
+                                  {voiceQuestResolvedLanguageCode}
                                 </span>
                               </div>
                               <div className="mt-3 max-h-[112px] overflow-y-auto pr-1">
@@ -2836,7 +2846,7 @@ Earn more points by completing quests and interacting with the protocol.
                                       className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-all ${
                                         isPlaceholder
                                           ? 'border border-white/10 bg-white/[0.04] text-white/35'
-                                          : isCorrect
+                                        : isCorrect
                                             ? 'border border-emerald-400/30 bg-emerald-500/15 text-emerald-300'
                                             : isCurrent
                                               ? 'border border-[#ff8f8f]/30 bg-[#3a0d0d] text-[#ffd5d5]'
@@ -2845,7 +2855,14 @@ Earn more points by completing quests and interacting with the protocol.
                                               : 'border border-white/10 bg-white/[0.04] text-white/55'
                                       }`}
                                     >
-                                      {word}
+                                      {isCorrect ? (
+                                        <span className="inline-flex items-center gap-1.5">
+                                          <CheckCircle2 className="h-3.5 w-3.5" />
+                                          <span>{word}</span>
+                                        </span>
+                                      ) : (
+                                        word
+                                      )}
                                     </span>
                                   );
                                 })}
