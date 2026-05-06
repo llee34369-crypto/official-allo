@@ -78,6 +78,7 @@ export default function TermsOfServicePage() {
                 'Not misuse AI tools for harmful, illegal, or deceptive activities',
                 'Not attempt to exploit, hack, or disrupt the system',
                 'Maintain the confidentiality of your wallet, keys, and credentials',
+                'Only submit voice or audio content that you are authorized to provide',
               ],
             },
             {
@@ -90,7 +91,16 @@ export default function TermsOfServicePage() {
                 'Any content you generate or process',
                 'Your blockchain transactions',
                 'Your use of SPKR tokens',
+                'Obtaining any consent required for voice, microphone, or audio submissions you make through the Protocol',
               ],
+            },
+            {
+              type: 'paragraph',
+              text: 'If you use a voice-based feature, quest, or reward flow, you consent to the Protocol requesting microphone access and processing the spoken prompt needed to verify that feature.',
+            },
+            {
+              type: 'paragraph',
+              text: 'You also understand and agree that voice submissions, recordings, transcripts, and related outputs you provide through the Protocol may be used to train, fine-tune, evaluate, and improve SpeakerAI artificial intelligence models, voice systems, and related services.',
             },
           ],
         },

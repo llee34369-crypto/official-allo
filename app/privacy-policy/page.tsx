@@ -37,6 +37,14 @@ export default function PrivacyPolicyPage() {
             },
             {
               type: 'paragraph',
+              text: 'For testnet voice verification features, the Protocol may request microphone access so you can read a prompted sentence for reward eligibility checks.',
+            },
+            {
+              type: 'paragraph',
+              text: 'Voice submissions, recordings, transcripts, and related outputs may be reviewed, processed, retained, and used to train, fine-tune, evaluate, and improve SpeakerAI models, voice systems, safety systems, and related machine learning tools.',
+            },
+            {
+              type: 'paragraph',
               text: '2.2 Automatically Collected Data',
             },
             {
@@ -73,7 +81,9 @@ export default function PrivacyPolicyPage() {
               type: 'list',
               items: [
                 'Provide AI processing and audio services',
+                'Verify eligibility for voice-based features, quests, and rewards',
                 'Improve model performance and accuracy',
+                'Train, fine-tune, evaluate, and improve AI and voice models',
                 'Enable blockchain transactions',
                 'Support developers and integrations',
                 'Enhance security and prevent abuse',
@@ -92,6 +102,7 @@ export default function PrivacyPolicyPage() {
                 'You retain ownership of your content',
                 'Blockchain data is immutable and cannot be altered',
                 'AI processing may temporarily use your data for outputs',
+                'Testnet reward and usage records may be retained to enforce rate limits, prevent abuse, and credit eligible points',
               ],
             },
           ],
@@ -241,6 +252,7 @@ export default function PrivacyPolicyPage() {
               type: 'list',
               items: [
                 'Off-chain data is retained only as necessary',
+                'Voice verification metadata, reward status, and daily usage counters may be retained for operational, security, and anti-abuse purposes',
                 'On-chain data is permanent',
               ],
             },
