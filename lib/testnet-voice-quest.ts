@@ -267,19 +267,6 @@ function pickRandomValue<T>(values: T[]) {
   return values[Math.floor(Math.random() * values.length)];
 }
 
-function buildVoiceQuestClause(parts: VoiceQuestSentenceParts) {
-  const template = pickRandomValue(VOICE_QUEST_SENTENCE_TEMPLATES);
-
-  return template(
-    pickRandomValue(parts.openings),
-    pickRandomValue(parts.middles),
-    pickRandomValue(parts.qualifiers),
-    pickRandomValue(parts.endings)
-  )
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 function encodeTokenPart(value: string) {
   return Buffer.from(value, 'utf8').toString('base64url');
 }
@@ -340,9 +327,13 @@ export function createVoiceQuestSentence(
 ) {
   const normalizedWalletAddress = normalizeWallet(walletAddress);
   const { languageCode, parts } = resolveVoiceQuestLanguage(requestedLanguageCode);
-  const firstClause = buildVoiceQuestClause(parts);
-  const secondClause = buildVoiceQuestClause(parts);
-  const expectedText = `${firstClause}. ${secondClause}`
+  const template = pickRandomValue(VOICE_QUEST_SENTENCE_TEMPLATES);
+  const expectedText = template(
+    pickRandomValue(parts.openings),
+    pickRandomValue(parts.middles),
+    pickRandomValue(parts.qualifiers),
+    pickRandomValue(parts.endings)
+  )
     .replace(/\s+/g, ' ')
     .trim();
 
