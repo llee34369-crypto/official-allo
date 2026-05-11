@@ -3,9 +3,9 @@
 import React, { ReactNode } from 'react';
 import { createWeb3Modal, defaultWagmiConfig } from '@web3modal/wagmi/react';
 import { WagmiProvider } from 'wagmi';
-import { bsc } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AllocationStateProvider } from '@/components/AllocationStateProvider';
+import { walletChains } from '@/lib/wallet-networks';
 
 // 1. Get projectId at https://cloud.walletconnect.com
 // NOTE: You MUST set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in your environment variables
@@ -19,9 +19,8 @@ const metadata = {
   icons: ['/icon.png']
 };
 
-const chains = [bsc] as const;
 const config = defaultWagmiConfig({
-  chains,
+  chains: walletChains,
   projectId,
   metadata,
   auth: {

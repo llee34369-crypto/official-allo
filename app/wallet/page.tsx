@@ -2,22 +2,35 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type SVGProps } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { AppKit } from '@web3modal/base';
 import { ConnectorController, OptionsController } from '@web3modal/core';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
+import { getBalance as getBalanceAction } from '@wagmi/core';
 import { formatUnits, isAddress, parseEther } from 'viem';
 import {
   useAccount,
   useBalance,
+  useChainId,
   useConnectors,
+  useConfig,
   useDisconnect,
   useSendTransaction,
+  useSwitchChain,
   useWaitForTransactionReceipt,
 } from 'wagmi';
+import {
+  defaultWalletChainId,
+  getAddressExplorerUrl,
+  getTransactionExplorerUrl,
+  getWalletChain,
+  walletChains,
+} from '@/lib/wallet-networks';
 import {
   Activity,
   ArrowDownLeft,
   ArrowLeft,
+  ArrowRightLeft,
   ArrowUpRight,
   CheckCircle2,
   Copy,
@@ -59,6 +72,8 @@ type StoredActivity = {
   to: string;
   amount: string;
   symbol: string;
+  chainId?: number;
+  chainName?: string;
   status: 'submitted' | 'confirmed';
   createdAt: string;
 };
@@ -140,6 +155,23 @@ const formatTokenAmount = (value?: string, maximumFractionDigits = 6) => {
   }).format(parsedValue);
 };
 
+const formatNativeBalance = (
+  balance:
+    | {
+        value: bigint;
+        decimals: number;
+      }
+    | null
+    | undefined,
+  maximumFractionDigits = 6
+) => {
+  if (!balance) {
+    return '--';
+  }
+
+  return formatTokenAmount(formatUnits(balance.value, balance.decimals), maximumFractionDigits);
+};
+
 const loadStoredAccounts = () => {
   if (typeof window === 'undefined') {
     return [] as StoredAccount[];
@@ -204,7 +236,9 @@ const loadStoredActivity = () => {
             typeof item.amount === 'string' &&
             typeof item.symbol === 'string' &&
             typeof item.status === 'string' &&
-            typeof item.createdAt === 'string'
+            typeof item.createdAt === 'string' &&
+            (item.chainId === undefined || typeof item.chainId === 'number') &&
+            (item.chainName === undefined || typeof item.chainName === 'string')
         )
     );
   } catch {
@@ -224,11 +258,16 @@ const getAccountLabel = (index: number) => (index === 0 ? 'Main Account' : `Acco
 
 export default function WalletPage() {
   const { address, connector, isConnected } = useAccount();
+  const activeChainId = useChainId();
+  const config = useConfig();
   const { disconnect } = useDisconnect();
   const { open } = useWeb3Modal();
   const connectors = useConnectors();
+  const { switchChainAsync, isPending: isSwitchingChain } = useSwitchChain();
+  const [selectedChainId, setSelectedChainId] = useState<number>(defaultWalletChainId);
   const { data: balance, refetch: refetchBalance } = useBalance({
     address,
+    chainId: selectedChainId,
     query: {
       enabled: Boolean(address),
     },
@@ -276,10 +315,42 @@ export default function WalletPage() {
   });
 
   const shouldShowWalletDashboard = Boolean(isConnected && address && isConnectedWithSpkWallet);
+  const selectedChain = getWalletChain(selectedChainId);
+  const activeWalletChain = getWalletChain(activeChainId);
+  const isSelectedChainActive = activeChainId === selectedChainId;
   const connectedAddress = address ?? '';
   const balanceFormatted = balance ? formatUnits(balance.value, balance.decimals) : undefined;
-  const addressExplorerUrl = address ? `https://bscscan.com/address/${address}` : '';
+  const addressExplorerUrl = address ? getAddressExplorerUrl(selectedChainId, address) : '';
   const latestActivity = storedActivity[0] ?? null;
+  const networkBalanceQueries = useQueries({
+    queries: walletChains.map((chain) => ({
+      queryKey: ['wallet-network-balance', address?.toLowerCase() ?? 'unknown', chain.id],
+      enabled: Boolean(address && shouldShowWalletDashboard),
+      staleTime: 30000,
+      retry: 1,
+      queryFn: async () =>
+        getBalanceAction(config, {
+          address: address as `0x${string}`,
+          chainId: chain.id,
+        }),
+    })),
+  });
+  const networkBalances = walletChains.map((chain, index) => {
+    const query = networkBalanceQueries[index];
+    return {
+      chain,
+      balance: query?.data,
+      isLoading: query?.isLoading ?? false,
+      isFetching: query?.isFetching ?? false,
+      isError: query?.isError ?? false,
+    };
+  });
+  const networksWithBalance = networkBalances.filter((item) => {
+    const parsed = Number(
+      item.balance ? formatUnits(item.balance.value, item.balance.decimals) : 0
+    );
+    return Number.isFinite(parsed) && parsed > 0;
+  }).length;
   const displayedAccounts = useMemo(() => {
     if (!address) {
       return storedAccounts;
@@ -306,6 +377,18 @@ export default function WalletPage() {
     setStoredAccounts(loadStoredAccounts());
     setStoredActivity(loadStoredActivity());
   }, []);
+
+  useEffect(() => {
+    if (!activeChainId) {
+      return;
+    }
+
+    if (walletChains.some((chain) => chain.id === activeChainId)) {
+      setSelectedChainId((currentChainId) =>
+        currentChainId === defaultWalletChainId ? activeChainId : currentChainId
+      );
+    }
+  }, [activeChainId]);
 
   useEffect(() => {
     const syncDetectedSpkWallet = () => {
@@ -468,6 +551,26 @@ export default function WalletPage() {
     void open({ view: 'Connect' });
   };
 
+  const handleSwitchSelectedNetwork = async () => {
+    if (!isConnected || !address) {
+      setSendError('Connect your SPK wallet first.');
+      return;
+    }
+
+    try {
+      setSendError(null);
+      setSendStatus(`Switching to ${selectedChain.name}...`);
+      await switchChainAsync({ chainId: selectedChainId });
+      setSendStatus(`Switched to ${selectedChain.name}.`);
+      void refetchBalance();
+    } catch (error) {
+      const nextError =
+        error instanceof Error ? error.message : `Unable to switch to ${selectedChain.name}.`;
+      setSendStatus(null);
+      setSendError(nextError);
+    }
+  };
+
   const handleSend = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSendStatus(null);
@@ -491,9 +594,15 @@ export default function WalletPage() {
       return;
     }
 
+    if (!isSelectedChainActive) {
+      setSendError(`Switch your wallet to ${selectedChain.name} before sending.`);
+      return;
+    }
+
     try {
       setSendStatus('Confirm in wallet...');
       const hash = await sendTransactionAsync({
+        chainId: selectedChainId,
         to: trimmedRecipient as `0x${string}`,
         value: parseEther(trimmedAmount),
       });
@@ -509,7 +618,9 @@ export default function WalletPage() {
             from: address,
             to: trimmedRecipient,
             amount: trimmedAmount,
-            symbol: balance?.symbol ?? 'BNB',
+            symbol: balance?.symbol ?? selectedChain.nativeCurrency.symbol,
+            chainId: selectedChainId,
+            chainName: selectedChain.name,
             status: 'submitted' as const,
             createdAt: new Date().toISOString(),
           },
@@ -627,70 +738,174 @@ export default function WalletPage() {
         </main>
       ) : (
         <main className="relative z-10 mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-20">
-          <section className="mb-10 grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
-            <div className="glass-card rounded-[36px] border border-white/10 p-8 lg:p-12">
-              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.4em] text-brand-red-glow">
-                Wallet
-              </p>
-              <h1 className="max-w-[10ch] font-display text-5xl font-black leading-[0.9] tracking-tight sm:text-6xl lg:text-7xl">
-                Your SPK wallet.
-              </h1>
-              <p className="mt-6 max-w-2xl text-base leading-8 text-white/65 sm:text-lg">
-                Manage your balance, transfers, and account.
-              </p>
+          <section className="mb-10 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+            <div className="glass-card overflow-hidden rounded-[36px] border border-white/10">
+              <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(139,0,0,0.2),rgba(10,10,10,0.4))] p-8 lg:p-10">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-brand-red-glow">
+                      Wallet Dashboard
+                    </p>
+                    <h1 className="mt-4 max-w-[11ch] font-display text-5xl font-black leading-[0.9] tracking-tight sm:text-6xl">
+                      Multi-network wallet control.
+                    </h1>
+                    <p className="mt-5 max-w-2xl text-base leading-8 text-white/65 sm:text-lg">
+                      Track your connected SPK wallet across supported chains, switch active networks, and manage native balances from one dashboard.
+                    </p>
+                  </div>
 
-              <div className="mt-8 flex flex-wrap gap-3">
-                {walletTabs.map((tab) => (
+                  <div className="min-w-[250px] rounded-[28px] border border-white/10 bg-black/25 p-5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                        Live Status
+                      </span>
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">
+                        SPK Connected
+                      </span>
+                    </div>
+                    <p className="mt-5 text-sm font-bold uppercase tracking-[0.22em] text-white/40">
+                      Active Network
+                    </p>
+                    <p className="mt-2 text-2xl font-black text-white">{selectedChain.name}</p>
+                    <p className="mt-4 text-sm text-white/55">
+                      Wallet chain: {activeWalletChain.name}
+                    </p>
+                    <p className="mt-2 text-sm text-white/55">
+                      Account: {shortenAddress(connectedAddress)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-8 flex flex-wrap gap-3">
                   <button
-                    key={tab.id}
                     type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`rounded-full px-5 py-3 text-xs font-black uppercase tracking-[0.24em] transition-all ${
-                      activeTab === tab.id
-                        ? 'bg-brand-red text-white red-glow'
-                        : 'border border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
-                    }`}
+                    onClick={() => void refetchBalance()}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10"
                   >
-                    {tab.label}
+                    <RefreshCcw className="h-4 w-4" />
+                    Refresh
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => void handleSwitchSelectedNetwork()}
+                    disabled={isSelectedChainActive || isSwitchingChain}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {isSwitchingChain ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ArrowRightLeft className="h-4 w-4" />
+                    )}
+                    {isSelectedChainActive ? `${selectedChain.name} Active` : `Switch To ${selectedChain.name}`}
+                  </button>
+                  <a
+                    href={addressExplorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    View Explorer
+                  </a>
+                </div>
+              </div>
+
+              <div className="p-8 lg:p-10">
+                <div className="flex flex-wrap gap-3">
+                  {walletTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`rounded-full px-5 py-3 text-xs font-black uppercase tracking-[0.24em] transition-all ${
+                        activeTab === tab.id
+                          ? 'bg-brand-red text-white red-glow'
+                          : 'border border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-8 flex flex-wrap gap-3">
+                  {walletChains.map((chain) => {
+                    const isSelected = selectedChainId === chain.id;
+                    const chainBalance = networkBalances.find((item) => item.chain.id === chain.id);
+
+                    return (
+                      <button
+                        key={chain.id}
+                        type="button"
+                        onClick={() => setSelectedChainId(chain.id)}
+                        className={`min-w-[150px] rounded-[22px] border px-4 py-4 text-left transition-all ${
+                          isSelected
+                            ? 'border-brand-red/40 bg-brand-red/10 red-glow'
+                            : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08]'
+                        }`}
+                      >
+                        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                          {chain.nativeCurrency.symbol}
+                        </p>
+                        <p className="mt-2 text-base font-black text-white">{chain.name}</p>
+                        <p className="mt-3 text-sm text-white/60">
+                          {chainBalance?.isLoading
+                            ? 'Loading...'
+                            : chainBalance?.balance
+                              ? `${formatNativeBalance(chainBalance.balance, 4)} ${chainBalance.balance.symbol}`
+                              : 'No balance'}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            <div className="glass-card rounded-[36px] border border-white/10 p-8 lg:p-10">
-              <div className="mb-8 flex items-center justify-between">
-                <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-brand-red/20 red-glow">
-                  <Wallet className="h-7 w-7 text-brand-red" />
+            <div className="space-y-6">
+              <div className="glass-card rounded-[36px] border border-white/10 p-8">
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
+                  Selected Network Balance
+                </p>
+                <div className="mt-4 flex items-end gap-3">
+                  <span className="font-display text-5xl font-black tracking-tight sm:text-6xl">
+                    {formatTokenAmount(balanceFormatted)}
+                  </span>
+                  <span className="pb-2 text-lg font-black text-brand-red">
+                    {balance?.symbol ?? selectedChain.nativeCurrency.symbol}
+                  </span>
                 </div>
-                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.3em] text-emerald-300">
-                  SPK Connected
-                </span>
+                <p className="mt-4 text-sm leading-7 text-white/55">
+                  Native balance for {selectedChain.name}.
+                </p>
               </div>
 
-              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
-                Whole Balance
-              </p>
-              <div className="mt-4 flex items-end gap-3">
-                <span className="font-display text-5xl font-black tracking-tight sm:text-6xl">
-                  {formatTokenAmount(balanceFormatted)}
-                </span>
-                <span className="pb-2 text-lg font-black text-brand-red">
-                  {balance?.symbol ?? 'BNB'}
-                </span>
-              </div>
-
-              <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="glass-card rounded-[28px] border border-white/10 p-5">
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
-                    Active Account
+                    Networks Tracked
                   </p>
-                  <p className="mt-3 text-lg font-black text-white">{shortenAddress(connectedAddress)}</p>
+                  <p className="mt-3 text-3xl font-black text-white">{walletChains.length}</p>
                 </div>
-                <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                <div className="glass-card rounded-[28px] border border-white/10 p-5">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
+                    Networks With Funds
+                  </p>
+                  <p className="mt-3 text-3xl font-black text-white">{networksWithBalance}</p>
+                </div>
+                <div className="glass-card rounded-[28px] border border-white/10 p-5">
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
                     Connector
                   </p>
-                  <p className="mt-3 text-lg font-black text-white">{connector?.name ?? 'SPK Wallet'}</p>
+                  <p className="mt-3 text-base font-black text-white">{connector?.name ?? 'SPK Wallet'}</p>
+                </div>
+                <div className="glass-card rounded-[28px] border border-white/10 p-5">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
+                    Send State
+                  </p>
+                  <p className="mt-3 text-base font-black text-white">
+                    {isSelectedChainActive ? 'Ready On Active Network' : `Switch To ${selectedChain.name}`}
+                  </p>
                 </div>
               </div>
             </div>
@@ -774,6 +989,9 @@ export default function WalletPage() {
                               <p className="mt-2 text-sm text-white/55">
                                 To {shortenAddress(item.to)}
                               </p>
+                              <p className="mt-1 text-sm text-white/40">
+                                {item.chainName ?? getWalletChain(item.chainId).name}
+                              </p>
                             </div>
                             <span
                               className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] ${
@@ -795,7 +1013,7 @@ export default function WalletPage() {
                               {copyState === 'hash' ? 'Hash Copied' : 'Copy Hash'}
                             </button>
                             <a
-                              href={`https://bscscan.com/tx/${item.hash}`}
+                              href={getTransactionExplorerUrl(item.chainId ?? selectedChainId, item.hash)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-2 text-sm font-bold text-brand-red-glow transition-colors hover:text-white"
@@ -832,6 +1050,26 @@ export default function WalletPage() {
                   </div>
 
                   <form onSubmit={handleSend} className="space-y-4">
+                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                        Sending On
+                      </p>
+                      <div className="mt-2 flex items-center justify-between gap-4">
+                        <p className="text-base font-black text-white">{selectedChain.name}</p>
+                        {!isSelectedChainActive ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleSwitchSelectedNetwork()}
+                            disabled={isSwitchingChain}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10 disabled:opacity-45"
+                          >
+                            {isSwitchingChain ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="h-3.5 w-3.5" />}
+                            Switch
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
                     <label className="block">
                       <span className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
                         Recipient Address
@@ -936,48 +1174,47 @@ export default function WalletPage() {
                   <div className="mb-6 flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
-                        Status
+                        Portfolio
                       </p>
-                      <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Wallet Info</h2>
+                      <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Network Balances</h2>
                     </div>
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/20">
                       <Globe className="h-6 w-6 text-brand-red" />
                     </div>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
-                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                        Network
-                      </p>
-                      <p className="mt-2 text-base font-black text-white">BNB Smart Chain</p>
-                    </div>
-                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
-                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                        Wallet
-                      </p>
-                      <p className="mt-2 text-base font-black text-white">SPK Wallet Only</p>
-                    </div>
-                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
-                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                        Asset View
-                      </p>
-                      <p className="mt-2 text-base font-black text-white">
-                        {formatTokenAmount(balanceFormatted, 4)} {balance?.symbol ?? 'BNB'}
-                      </p>
-                    </div>
-                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
-                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                        Latest Status
-                      </p>
-                      <p className="mt-2 text-base font-black text-white">
-                        {latestActivity
-                          ? latestActivity.status === 'confirmed'
-                            ? 'Confirmed'
-                            : 'Pending'
-                          : 'Ready'}
-                      </p>
-                    </div>
+                  <div className="space-y-3">
+                    {networkBalances.map((item) => (
+                      <button
+                        key={item.chain.id}
+                        type="button"
+                        onClick={() => setSelectedChainId(item.chain.id)}
+                        className={`flex w-full items-center justify-between gap-4 rounded-[22px] border px-4 py-4 text-left transition-all ${
+                          item.chain.id === selectedChainId
+                            ? 'border-brand-red/40 bg-brand-red/10'
+                            : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.07]'
+                        }`}
+                      >
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                            {item.chain.nativeCurrency.symbol}
+                          </p>
+                          <p className="mt-2 text-base font-black text-white">{item.chain.name}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-base font-black text-white">
+                            {item.isLoading
+                              ? 'Loading...'
+                              : item.balance
+                                ? `${formatNativeBalance(item.balance, 6)} ${item.balance.symbol}`
+                                : 'Unavailable'}
+                          </p>
+                          <p className="mt-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
+                            {item.chain.id === activeChainId ? 'Wallet Active' : 'Tracked'}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
                   </div>
 
                   <button
