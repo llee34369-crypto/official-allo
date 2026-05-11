@@ -38,6 +38,7 @@ import {
   Globe,
   LoaderCircle,
   LogOut,
+  Search,
   RefreshCcw,
   Send,
   Wallet,
@@ -276,6 +277,7 @@ export default function WalletPage() {
 
   const [activeTab, setActiveTab] = useState<WalletTab>('overview');
   const [copyState, setCopyState] = useState<'idle' | 'address' | 'account' | 'hash'>('idle');
+  const [dashboardSearch, setDashboardSearch] = useState('');
   const [sendTo, setSendTo] = useState('');
   const [sendAmount, setSendAmount] = useState('');
   const [sendStatus, setSendStatus] = useState<string | null>(null);
@@ -351,6 +353,29 @@ export default function WalletPage() {
     );
     return Number.isFinite(parsed) && parsed > 0;
   }).length;
+  const normalizedDashboardSearch = dashboardSearch.trim().toLowerCase();
+  const filteredNetworkBalances = networkBalances.filter((item) => {
+    if (!normalizedDashboardSearch) {
+      return true;
+    }
+
+    return (
+      item.chain.name.toLowerCase().includes(normalizedDashboardSearch) ||
+      item.chain.nativeCurrency.symbol.toLowerCase().includes(normalizedDashboardSearch)
+    );
+  });
+  const filteredActivity = storedActivity.filter((item) => {
+    if (!normalizedDashboardSearch) {
+      return true;
+    }
+
+    return (
+      item.hash.toLowerCase().includes(normalizedDashboardSearch) ||
+      item.to.toLowerCase().includes(normalizedDashboardSearch) ||
+      item.from.toLowerCase().includes(normalizedDashboardSearch) ||
+      (item.chainName ?? '').toLowerCase().includes(normalizedDashboardSearch)
+    );
+  });
   const displayedAccounts = useMemo(() => {
     if (!address) {
       return storedAccounts;
@@ -372,6 +397,16 @@ export default function WalletPage() {
       ...storedAccounts.filter((item) => item.address.toLowerCase() !== currentAddressLower),
     ].slice(0, 6);
   }, [address, storedAccounts]);
+  const filteredAccounts = displayedAccounts.filter((item) => {
+    if (!normalizedDashboardSearch) {
+      return true;
+    }
+
+    return (
+      item.label.toLowerCase().includes(normalizedDashboardSearch) ||
+      item.address.toLowerCase().includes(normalizedDashboardSearch)
+    );
+  });
 
   useEffect(() => {
     setStoredAccounts(loadStoredAccounts());
@@ -737,184 +772,219 @@ export default function WalletPage() {
           </div>
         </main>
       ) : (
-        <main className="relative z-10 mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-20">
-          <section className="mb-10 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="glass-card overflow-hidden rounded-[36px] border border-white/10">
-              <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(139,0,0,0.2),rgba(10,10,10,0.4))] p-8 lg:p-10">
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-brand-red-glow">
-                      Wallet Dashboard
-                    </p>
-                    <h1 className="mt-4 max-w-[11ch] font-display text-5xl font-black leading-[0.9] tracking-tight sm:text-6xl">
-                      Multi-network wallet control.
-                    </h1>
-                    <p className="mt-5 max-w-2xl text-base leading-8 text-white/65 sm:text-lg">
-                      Track your connected SPK wallet across supported chains, switch active networks, and manage native balances from one dashboard.
-                    </p>
+        <main className="relative z-10 mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+          <section className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
+            <aside className="glass-card h-fit rounded-[32px] border border-white/10 p-5">
+              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(139,0,0,0.18),rgba(255,255,255,0.03))] p-5">
+                <p className="text-[10px] font-black uppercase tracking-[0.32em] text-brand-red-glow">
+                  Active Wallet
+                </p>
+                <p className="mt-3 text-lg font-black text-white">{shortenAddress(connectedAddress)}</p>
+                <p className="mt-2 text-sm text-white/50">{connector?.name ?? 'SPK Wallet'}</p>
+              </div>
+
+              <div className="mt-5 space-y-2">
+                {walletTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex w-full items-center justify-between rounded-[20px] px-4 py-3 text-left text-sm font-black uppercase tracking-[0.22em] transition-all ${
+                      activeTab === tab.id
+                        ? 'bg-brand-red text-white red-glow'
+                        : 'border border-white/10 bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white'
+                    }`}
+                  >
+                    {tab.label}
+                    <span className="text-[10px] text-white/45">
+                      {tab.id === 'overview' ? '01' : tab.id === 'send' ? '02' : tab.id === 'receive' ? '03' : tab.id === 'activity' ? '04' : '05'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-5 grid gap-3">
+                <div className="rounded-[20px] border border-white/10 bg-white/[0.04] p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">Tracked Networks</p>
+                  <p className="mt-2 text-2xl font-black text-white">{walletChains.length}</p>
+                </div>
+                <div className="rounded-[20px] border border-white/10 bg-white/[0.04] p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">With Balance</p>
+                  <p className="mt-2 text-2xl font-black text-white">{networksWithBalance}</p>
+                </div>
+              </div>
+            </aside>
+
+            <div className="space-y-6">
+              <div className="glass-card overflow-hidden rounded-[32px] border border-white/10">
+                <div className="border-b border-white/10 px-6 py-5 sm:px-8">
+                  <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.36em] text-brand-red-glow">
+                        Dashboard
+                      </p>
+                      <h1 className="mt-3 font-display text-4xl font-black tracking-tight sm:text-5xl">
+                        Wallet control center
+                      </h1>
+                    </div>
+
+                    <label className="relative block w-full max-w-md">
+                      <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                      <input
+                        type="text"
+                        value={dashboardSearch}
+                        onChange={(event) => setDashboardSearch(event.target.value)}
+                        placeholder="Search networks, accounts, activity..."
+                        className="w-full rounded-[20px] border border-white/10 bg-black/35 px-11 py-3 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-brand-red/40"
+                      />
+                    </label>
                   </div>
 
-                  <div className="min-w-[250px] rounded-[28px] border border-white/10 bg-black/25 p-5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
-                        Live Status
-                      </span>
-                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">
-                        SPK Connected
-                      </span>
-                    </div>
-                    <p className="mt-5 text-sm font-bold uppercase tracking-[0.22em] text-white/40">
-                      Active Network
-                    </p>
-                    <p className="mt-2 text-2xl font-black text-white">{selectedChain.name}</p>
-                    <p className="mt-4 text-sm text-white/55">
-                      Wallet chain: {activeWalletChain.name}
-                    </p>
-                    <p className="mt-2 text-sm text-white/55">
-                      Account: {shortenAddress(connectedAddress)}
-                    </p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('send')}
+                      className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-black transition-all hover:bg-brand-red hover:text-white"
+                    >
+                      <Send className="h-4 w-4" />
+                      Send
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('receive')}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-all hover:bg-white/10"
+                    >
+                      <ArrowDownLeft className="h-4 w-4" />
+                      Receive
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSwitchSelectedNetwork()}
+                      disabled={isSelectedChainActive || isSwitchingChain}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      {isSwitchingChain ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ArrowRightLeft className="h-4 w-4" />
+                      )}
+                      {isSelectedChainActive ? 'Network Active' : 'Switch Network'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void refetchBalance()}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-all hover:bg-white/10"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                      Refresh
+                    </button>
+                    <a
+                      href={addressExplorerUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-all hover:bg-white/10"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Explorer
+                    </a>
                   </div>
                 </div>
 
-                <div className="mt-8 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => void refetchBalance()}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10"
-                  >
-                    <RefreshCcw className="h-4 w-4" />
-                    Refresh
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleSwitchSelectedNetwork()}
-                    disabled={isSelectedChainActive || isSwitchingChain}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    {isSwitchingChain ? (
-                      <LoaderCircle className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ArrowRightLeft className="h-4 w-4" />
-                    )}
-                    {isSelectedChainActive ? `${selectedChain.name} Active` : `Switch To ${selectedChain.name}`}
-                  </button>
-                  <a
-                    href={addressExplorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    View Explorer
-                  </a>
+                <div className="grid gap-6 px-6 py-6 sm:px-8 lg:grid-cols-[1.2fr_0.8fr]">
+                  <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(139,0,0,0.18),rgba(255,255,255,0.03))] p-6 sm:p-7">
+                    <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                      Selected Network Balance
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-end gap-3">
+                      <span className="font-display text-5xl font-black tracking-tight sm:text-6xl">
+                        {formatTokenAmount(balanceFormatted)}
+                      </span>
+                      <span className="pb-2 text-xl font-black text-brand-red">
+                        {balance?.symbol ?? selectedChain.nativeCurrency.symbol}
+                      </span>
+                    </div>
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <span className="rounded-full border border-white/10 bg-black/30 px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-white/80">
+                        {selectedChain.name}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/30 px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-white/55">
+                        Wallet chain: {activeWalletChain.name}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                        Selected Network
+                      </p>
+                      <p className="mt-3 text-xl font-black text-white">{selectedChain.name}</p>
+                      <p className="mt-2 text-sm text-white/50">
+                        {isSelectedChainActive ? 'Ready for sending' : 'Switch required before send'}
+                      </p>
+                    </div>
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                        Connector
+                      </p>
+                      <p className="mt-3 text-xl font-black text-white">{connector?.name ?? 'SPK Wallet'}</p>
+                      <p className="mt-2 text-sm text-white/50">{shortenAddress(connectedAddress)}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-8 lg:p-10">
-                <div className="flex flex-wrap gap-3">
-                  {walletTabs.map((tab) => (
+              <div className="glass-card rounded-[32px] border border-white/10 p-6 sm:p-8">
+                <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                      Networks
+                    </p>
+                    <h2 className="mt-2 font-display text-3xl font-black tracking-tight">
+                      Portfolio by chain
+                    </h2>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {filteredNetworkBalances.map((item) => (
                     <button
-                      key={tab.id}
+                      key={item.chain.id}
                       type="button"
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`rounded-full px-5 py-3 text-xs font-black uppercase tracking-[0.24em] transition-all ${
-                        activeTab === tab.id
-                          ? 'bg-brand-red text-white red-glow'
-                          : 'border border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
+                      onClick={() => setSelectedChainId(item.chain.id)}
+                      className={`rounded-[24px] border p-5 text-left transition-all ${
+                        item.chain.id === selectedChainId
+                          ? 'border-brand-red/40 bg-brand-red/10 red-glow'
+                          : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08]'
                       }`}
                     >
-                      {tab.label}
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                            {item.chain.nativeCurrency.symbol}
+                          </p>
+                          <p className="mt-2 text-lg font-black text-white">{item.chain.name}</p>
+                        </div>
+                        <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/45">
+                          {item.chain.id === activeChainId ? 'Active' : 'Tracked'}
+                        </span>
+                      </div>
+                      <p className="mt-5 text-2xl font-black text-white">
+                        {item.isLoading
+                          ? 'Loading...'
+                          : item.balance
+                            ? `${formatNativeBalance(item.balance, 6)} ${item.balance.symbol}`
+                            : 'Unavailable'}
+                      </p>
                     </button>
                   ))}
                 </div>
-
-                <div className="mt-8 flex flex-wrap gap-3">
-                  {walletChains.map((chain) => {
-                    const isSelected = selectedChainId === chain.id;
-                    const chainBalance = networkBalances.find((item) => item.chain.id === chain.id);
-
-                    return (
-                      <button
-                        key={chain.id}
-                        type="button"
-                        onClick={() => setSelectedChainId(chain.id)}
-                        className={`min-w-[150px] rounded-[22px] border px-4 py-4 text-left transition-all ${
-                          isSelected
-                            ? 'border-brand-red/40 bg-brand-red/10 red-glow'
-                            : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08]'
-                        }`}
-                      >
-                        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                          {chain.nativeCurrency.symbol}
-                        </p>
-                        <p className="mt-2 text-base font-black text-white">{chain.name}</p>
-                        <p className="mt-3 text-sm text-white/60">
-                          {chainBalance?.isLoading
-                            ? 'Loading...'
-                            : chainBalance?.balance
-                              ? `${formatNativeBalance(chainBalance.balance, 4)} ${chainBalance.balance.symbol}`
-                              : 'No balance'}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="glass-card rounded-[36px] border border-white/10 p-8">
-                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
-                  Selected Network Balance
-                </p>
-                <div className="mt-4 flex items-end gap-3">
-                  <span className="font-display text-5xl font-black tracking-tight sm:text-6xl">
-                    {formatTokenAmount(balanceFormatted)}
-                  </span>
-                  <span className="pb-2 text-lg font-black text-brand-red">
-                    {balance?.symbol ?? selectedChain.nativeCurrency.symbol}
-                  </span>
-                </div>
-                <p className="mt-4 text-sm leading-7 text-white/55">
-                  Native balance for {selectedChain.name}.
-                </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="glass-card rounded-[28px] border border-white/10 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
-                    Networks Tracked
-                  </p>
-                  <p className="mt-3 text-3xl font-black text-white">{walletChains.length}</p>
-                </div>
-                <div className="glass-card rounded-[28px] border border-white/10 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
-                    Networks With Funds
-                  </p>
-                  <p className="mt-3 text-3xl font-black text-white">{networksWithBalance}</p>
-                </div>
-                <div className="glass-card rounded-[28px] border border-white/10 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
-                    Connector
-                  </p>
-                  <p className="mt-3 text-base font-black text-white">{connector?.name ?? 'SPK Wallet'}</p>
-                </div>
-                <div className="glass-card rounded-[28px] border border-white/10 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
-                    Send State
-                  </p>
-                  <p className="mt-3 text-base font-black text-white">
-                    {isSelectedChainActive ? 'Ready On Active Network' : `Switch To ${selectedChain.name}`}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="space-y-6">
-              {(activeTab === 'overview' || activeTab === 'receive') && (
-                <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
+              <section className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+                <div className="space-y-6">
+                  {(activeTab === 'overview' || activeTab === 'receive') && (
+                    <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
                   <div className="mb-6 flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
@@ -954,11 +1024,11 @@ export default function WalletPage() {
                   <p className="mt-4 text-sm leading-7 text-white/55">
                     Use this address to receive funds.
                   </p>
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {(activeTab === 'overview' || activeTab === 'activity') && (
-                <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
+                  {(activeTab === 'overview' || activeTab === 'activity') && (
+                    <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
                   <div className="mb-6 flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
@@ -972,8 +1042,8 @@ export default function WalletPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {storedActivity.length ? (
-                      storedActivity.map((item) => (
+                    {filteredActivity.length ? (
+                      filteredActivity.map((item) => (
                         <div
                           key={item.hash}
                           className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4"
@@ -1026,17 +1096,17 @@ export default function WalletPage() {
                       ))
                     ) : (
                       <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-white/45">
-                        No recent activity.
+                        No matching activity.
                       </div>
                     )}
                   </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <div className="space-y-6">
-              {(activeTab === 'overview' || activeTab === 'send') && (
-                <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
+                <div className="space-y-6">
+                  {(activeTab === 'overview' || activeTab === 'send') && (
+                    <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
                   <div className="mb-6 flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
@@ -1123,11 +1193,11 @@ export default function WalletPage() {
                       {sendError}
                     </p>
                   ) : null}
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {(activeTab === 'overview' || activeTab === 'accounts') && (
-                <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
+                  {(activeTab === 'overview' || activeTab === 'accounts') && (
+                    <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
                   <div className="mb-6 flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
@@ -1141,7 +1211,7 @@ export default function WalletPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {displayedAccounts.map((item) => (
+                    {filteredAccounts.map((item) => (
                       <div
                         key={item.address}
                         className="flex items-center justify-between gap-4 rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-4"
@@ -1166,11 +1236,11 @@ export default function WalletPage() {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {(activeTab === 'overview' || activeTab === 'send') && (
-                <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
+                  {(activeTab === 'overview' || activeTab === 'send') && (
+                    <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
                   <div className="mb-6 flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
@@ -1225,8 +1295,10 @@ export default function WalletPage() {
                     <RefreshCcw className="h-4 w-4" />
                     Refresh Balance
                   </button>
+                    </div>
+                  )}
                 </div>
-              )}
+              </section>
             </div>
           </section>
 
