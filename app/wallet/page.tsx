@@ -773,533 +773,466 @@ export default function WalletPage() {
         </main>
       ) : (
         <main className="relative z-10 mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-          <section className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
-            <aside className="glass-card h-fit rounded-[32px] border border-white/10 p-5">
-              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(139,0,0,0.18),rgba(255,255,255,0.03))] p-5">
-                <p className="text-[10px] font-black uppercase tracking-[0.32em] text-brand-red-glow">
-                  Active Wallet
-                </p>
-                <p className="mt-3 text-lg font-black text-white">{shortenAddress(connectedAddress)}</p>
-                <p className="mt-2 text-sm text-white/50">{connector?.name ?? 'SPK Wallet'}</p>
-              </div>
+          <section className="space-y-6">
+            <div className="glass-card overflow-hidden rounded-[36px] border border-white/10">
+              <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(139,0,0,0.24),rgba(255,255,255,0.03),rgba(10,10,10,0.65))] px-6 py-6 sm:px-8">
+                <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.38em] text-brand-red-glow">
+                      Wallet Dashboard
+                    </p>
+                    <h1 className="mt-3 font-display text-4xl font-black tracking-tight sm:text-5xl">
+                      Manage your wallet faster.
+                    </h1>
+                    <p className="mt-4 max-w-2xl text-sm leading-7 text-white/60 sm:text-base">
+                      One place for balances, receive address, transfers, activity, and network switching.
+                    </p>
+                  </div>
 
-              <div className="mt-5 space-y-2">
-                {walletTabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex w-full items-center justify-between rounded-[20px] px-4 py-3 text-left text-sm font-black uppercase tracking-[0.22em] transition-all ${
-                      activeTab === tab.id
-                        ? 'bg-brand-red text-white red-glow'
-                        : 'border border-white/10 bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white'
-                    }`}
-                  >
-                    {tab.label}
-                    <span className="text-[10px] text-white/45">
-                      {tab.id === 'overview' ? '01' : tab.id === 'send' ? '02' : tab.id === 'receive' ? '03' : tab.id === 'activity' ? '04' : '05'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-5 grid gap-3">
-                <div className="rounded-[20px] border border-white/10 bg-white/[0.04] p-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">Tracked Networks</p>
-                  <p className="mt-2 text-2xl font-black text-white">{walletChains.length}</p>
+                  <label className="relative block w-full max-w-md">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                    <input
+                      type="text"
+                      value={dashboardSearch}
+                      onChange={(event) => setDashboardSearch(event.target.value)}
+                      placeholder="Search networks, accounts, activity..."
+                      className="w-full rounded-[20px] border border-white/10 bg-black/35 px-11 py-3 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-brand-red/40"
+                    />
+                  </label>
                 </div>
-                <div className="rounded-[20px] border border-white/10 bg-white/[0.04] p-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">With Balance</p>
-                  <p className="mt-2 text-2xl font-black text-white">{networksWithBalance}</p>
-                </div>
-              </div>
-            </aside>
 
-            <div className="space-y-6">
-              <div className="glass-card overflow-hidden rounded-[32px] border border-white/10">
-                <div className="border-b border-white/10 px-6 py-5 sm:px-8">
-                  <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.36em] text-brand-red-glow">
-                        Dashboard
-                      </p>
-                      <h1 className="mt-3 font-display text-4xl font-black tracking-tight sm:text-5xl">
-                        Wallet control center
-                      </h1>
+                <div className="mt-6 grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
+                  <div className="rounded-[30px] border border-white/10 bg-black/25 p-6 sm:p-7">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">
+                        SPK Connected
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-white/50">
+                        {connector?.name ?? 'SPK Wallet'}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-white/50">
+                        {shortenAddress(connectedAddress)}
+                      </span>
                     </div>
 
-                    <label className="relative block w-full max-w-md">
-                      <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
-                      <input
-                        type="text"
-                        value={dashboardSearch}
-                        onChange={(event) => setDashboardSearch(event.target.value)}
-                        placeholder="Search networks, accounts, activity..."
-                        className="w-full rounded-[20px] border border-white/10 bg-black/35 px-11 py-3 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-brand-red/40"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('send')}
-                      className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-black transition-all hover:bg-brand-red hover:text-white"
-                    >
-                      <Send className="h-4 w-4" />
-                      Send
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('receive')}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-all hover:bg-white/10"
-                    >
-                      <ArrowDownLeft className="h-4 w-4" />
-                      Receive
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleSwitchSelectedNetwork()}
-                      disabled={isSelectedChainActive || isSwitchingChain}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      {isSwitchingChain ? (
-                        <LoaderCircle className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ArrowRightLeft className="h-4 w-4" />
-                      )}
-                      {isSelectedChainActive ? 'Network Active' : 'Switch Network'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void refetchBalance()}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-all hover:bg-white/10"
-                    >
-                      <RefreshCcw className="h-4 w-4" />
-                      Refresh
-                    </button>
-                    <a
-                      href={addressExplorerUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-all hover:bg-white/10"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      Explorer
-                    </a>
-                  </div>
-                </div>
-
-                <div className="grid gap-6 px-6 py-6 sm:px-8 lg:grid-cols-[1.2fr_0.8fr]">
-                  <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(139,0,0,0.18),rgba(255,255,255,0.03))] p-6 sm:p-7">
-                    <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                    <p className="mt-6 text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
                       Selected Network Balance
                     </p>
-                    <div className="mt-4 flex flex-wrap items-end gap-3">
+                    <div className="mt-3 flex flex-wrap items-end gap-3">
                       <span className="font-display text-5xl font-black tracking-tight sm:text-6xl">
                         {formatTokenAmount(balanceFormatted)}
                       </span>
-                      <span className="pb-2 text-xl font-black text-brand-red">
+                      <span className="pb-2 text-lg font-black text-brand-red">
                         {balance?.symbol ?? selectedChain.nativeCurrency.symbol}
                       </span>
                     </div>
-                    <div className="mt-6 flex flex-wrap gap-3">
-                      <span className="rounded-full border border-white/10 bg-black/30 px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-white/80">
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <span className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-white/75">
                         {selectedChain.name}
                       </span>
-                      <span className="rounded-full border border-white/10 bg-black/30 px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-white/55">
+                      <span className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-white/45">
                         Wallet chain: {activeWalletChain.name}
                       </span>
                     </div>
+
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('send')}
+                        className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-black transition-all hover:bg-brand-red hover:text-white"
+                      >
+                        <Send className="h-4 w-4" />
+                        Send
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('receive')}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-all hover:bg-white/10"
+                      >
+                        <ArrowDownLeft className="h-4 w-4" />
+                        Receive
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleSwitchSelectedNetwork()}
+                        disabled={isSelectedChainActive || isSwitchingChain}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {isSwitchingChain ? (
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ArrowRightLeft className="h-4 w-4" />
+                        )}
+                        {isSelectedChainActive ? 'Network Active' : 'Switch Network'}
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                  <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
                     <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
                       <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                        Selected Network
+                        Networks Tracked
                       </p>
-                      <p className="mt-3 text-xl font-black text-white">{selectedChain.name}</p>
-                      <p className="mt-2 text-sm text-white/50">
-                        {isSelectedChainActive ? 'Ready for sending' : 'Switch required before send'}
-                      </p>
+                      <p className="mt-3 text-3xl font-black text-white">{walletChains.length}</p>
                     </div>
                     <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
                       <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                        Connector
+                        Networks With Balance
                       </p>
-                      <p className="mt-3 text-xl font-black text-white">{connector?.name ?? 'SPK Wallet'}</p>
-                      <p className="mt-2 text-sm text-white/50">{shortenAddress(connectedAddress)}</p>
+                      <p className="mt-3 text-3xl font-black text-white">{networksWithBalance}</p>
+                    </div>
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                        Send Status
+                      </p>
+                      <p className="mt-3 text-base font-black text-white">
+                        {isSelectedChainActive ? 'Ready to send' : `Switch to ${selectedChain.name}`}
+                      </p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="glass-card rounded-[32px] border border-white/10 p-6 sm:p-8">
-                <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
-                      Networks
-                    </p>
-                    <h2 className="mt-2 font-display text-3xl font-black tracking-tight">
-                      Portfolio by chain
-                    </h2>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {filteredNetworkBalances.map((item) => (
+              <div className="px-6 py-5 sm:px-8">
+                <div className="flex flex-wrap gap-3">
+                  {walletTabs.map((tab) => (
                     <button
-                      key={item.chain.id}
+                      key={tab.id}
                       type="button"
-                      onClick={() => setSelectedChainId(item.chain.id)}
-                      className={`rounded-[24px] border p-5 text-left transition-all ${
-                        item.chain.id === selectedChainId
-                          ? 'border-brand-red/40 bg-brand-red/10 red-glow'
-                          : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08]'
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`rounded-full px-5 py-3 text-xs font-black uppercase tracking-[0.24em] transition-all ${
+                        activeTab === tab.id
+                          ? 'bg-brand-red text-white red-glow'
+                          : 'border border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                            {item.chain.nativeCurrency.symbol}
-                          </p>
-                          <p className="mt-2 text-lg font-black text-white">{item.chain.name}</p>
-                        </div>
-                        <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/45">
-                          {item.chain.id === activeChainId ? 'Active' : 'Tracked'}
-                        </span>
-                      </div>
-                      <p className="mt-5 text-2xl font-black text-white">
-                        {item.isLoading
-                          ? 'Loading...'
-                          : item.balance
-                            ? `${formatNativeBalance(item.balance, 6)} ${item.balance.symbol}`
-                            : 'Unavailable'}
-                      </p>
+                      {tab.label}
                     </button>
                   ))}
                 </div>
               </div>
+            </div>
 
-              <section className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
-                <div className="space-y-6">
-                  {(activeTab === 'overview' || activeTab === 'receive') && (
-                    <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
-                  <div className="mb-6 flex items-center justify-between">
+            <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-6">
+                <div className="glass-card rounded-[32px] border border-white/10 p-6 sm:p-8">
+                  <div className="mb-5 flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
-                        Receive
+                      <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                        Networks
                       </p>
-                      <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Wallet Address</h2>
+                      <h2 className="mt-2 font-display text-3xl font-black tracking-tight">
+                        Choose a network
+                      </h2>
                     </div>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/20">
-                      <ArrowDownLeft className="h-6 w-6 text-brand-red" />
-                    </div>
-                  </div>
-
-                  <div className="rounded-[24px] border border-brand-red/20 bg-brand-red/10 p-5">
-                    <p className="break-all font-mono text-sm leading-7 text-white/85">{connectedAddress}</p>
-                  </div>
-
-                  <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                     <button
                       type="button"
-                      onClick={() => void copyText(connectedAddress, 'address')}
-                      className="inline-flex items-center justify-center gap-3 rounded-2xl bg-white px-5 py-4 text-sm font-black uppercase tracking-[0.24em] text-black transition-all hover:bg-brand-red hover:text-white"
+                      onClick={() => void refetchBalance()}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10"
                     >
-                      <Copy className="h-4 w-4" />
-                      {copyState === 'address' ? 'Copied' : 'Copy Address'}
+                      <RefreshCcw className="h-4 w-4" />
+                      Refresh
                     </button>
-                    <a
-                      href={addressExplorerUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      Open Explorer
-                    </a>
                   </div>
 
-                  <p className="mt-4 text-sm leading-7 text-white/55">
-                    Use this address to receive funds.
-                  </p>
-                    </div>
-                  )}
-
-                  {(activeTab === 'overview' || activeTab === 'activity') && (
-                    <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
-                  <div className="mb-6 flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
-                        Activity
-                      </p>
-                      <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Recent Activity</h2>
-                    </div>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/20">
-                      <Activity className="h-6 w-6 text-brand-red" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {filteredActivity.length ? (
-                      filteredActivity.map((item) => (
-                        <div
-                          key={item.hash}
-                          className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4"
-                        >
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                                {item.status === 'confirmed' ? 'Confirmed Transfer' : 'Pending Transfer'}
-                              </p>
-                              <p className="mt-2 text-lg font-black text-white">
-                                {formatTokenAmount(item.amount)} {item.symbol}
-                              </p>
-                              <p className="mt-2 text-sm text-white/55">
-                                To {shortenAddress(item.to)}
-                              </p>
-                              <p className="mt-1 text-sm text-white/40">
-                                {item.chainName ?? getWalletChain(item.chainId).name}
-                              </p>
-                            </div>
-                            <span
-                              className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] ${
-                                item.status === 'confirmed'
-                                  ? 'border border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
-                                  : 'border border-amber-300/20 bg-amber-300/10 text-amber-200'
-                              }`}
-                            >
-                              {item.status}
-                            </span>
-                          </div>
-                          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                            <button
-                              type="button"
-                              onClick={() => void copyText(item.hash, 'hash')}
-                              className="inline-flex items-center gap-2 text-sm font-bold text-white/70 transition-colors hover:text-white"
-                            >
-                              <Copy className="h-4 w-4" />
-                              {copyState === 'hash' ? 'Hash Copied' : 'Copy Hash'}
-                            </button>
-                            <a
-                              href={getTransactionExplorerUrl(item.chainId ?? selectedChainId, item.hash)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 text-sm font-bold text-brand-red-glow transition-colors hover:text-white"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                              View Transaction
-                            </a>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-white/45">
-                        No matching activity.
-                      </div>
-                    )}
-                  </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-6">
-                  {(activeTab === 'overview' || activeTab === 'send') && (
-                    <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
-                  <div className="mb-6 flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
-                        Send
-                      </p>
-                      <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Transfer Funds</h2>
-                    </div>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/20">
-                      <ArrowUpRight className="h-6 w-6 text-brand-red" />
-                    </div>
-                  </div>
-
-                  <form onSubmit={handleSend} className="space-y-4">
-                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-4">
-                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                        Sending On
-                      </p>
-                      <div className="mt-2 flex items-center justify-between gap-4">
-                        <p className="text-base font-black text-white">{selectedChain.name}</p>
-                        {!isSelectedChainActive ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleSwitchSelectedNetwork()}
-                            disabled={isSwitchingChain}
-                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10 disabled:opacity-45"
-                          >
-                            {isSwitchingChain ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="h-3.5 w-3.5" />}
-                            Switch
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <label className="block">
-                      <span className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                        Recipient Address
-                      </span>
-                      <input
-                        type="text"
-                        value={sendTo}
-                        onChange={(event) => setSendTo(event.target.value)}
-                        placeholder="0x..."
-                        className="mt-3 w-full rounded-[22px] border border-white/10 bg-black/35 px-4 py-4 text-sm text-white outline-none transition-all placeholder:text-white/20 focus:border-brand-red/40"
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                        Amount
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.000001"
-                        value={sendAmount}
-                        onChange={(event) => setSendAmount(event.target.value)}
-                        placeholder="0.0"
-                        className="mt-3 w-full rounded-[22px] border border-white/10 bg-black/35 px-4 py-4 text-sm text-white outline-none transition-all placeholder:text-white/20 focus:border-brand-red/40"
-                      />
-                    </label>
-
-                    <button
-                      type="submit"
-                      disabled={isSending || isConfirming}
-                      className="inline-flex w-full items-center justify-center gap-3 rounded-[22px] bg-brand-red px-5 py-4 text-sm font-black uppercase tracking-[0.28em] text-white transition-all hover:bg-brand-red-glow disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      {isSending || isConfirming ? (
-                        <LoaderCircle className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                      {isSending ? 'Confirm In Wallet' : isConfirming ? 'Confirming' : 'Send Now'}
-                    </button>
-                  </form>
-
-                  {sendStatus ? (
-                    <p className="mt-4 rounded-2xl border border-emerald-400/15 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
-                      {sendStatus}
-                    </p>
-                  ) : null}
-
-                  {sendError ? (
-                    <p className="mt-4 rounded-2xl border border-[#ff7c7c]/20 bg-[#4a0a0a]/40 px-4 py-3 text-sm text-[#ffb0b0]">
-                      {sendError}
-                    </p>
-                  ) : null}
-                    </div>
-                  )}
-
-                  {(activeTab === 'overview' || activeTab === 'accounts') && (
-                    <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
-                  <div className="mb-6 flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
-                        Accounts
-                      </p>
-                      <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Recent Accounts</h2>
-                    </div>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/20">
-                      <Wallet className="h-6 w-6 text-brand-red" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {filteredAccounts.map((item) => (
-                      <div
-                        key={item.address}
-                        className="flex items-center justify-between gap-4 rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-4"
-                      >
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                            {item.label}
-                          </p>
-                          <p className="mt-2 font-mono text-sm text-white/85">{item.address}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void copyText(item.address, 'account')}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-all hover:bg-white/10"
-                        >
-                          {copyState === 'account' ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                    </div>
-                  )}
-
-                  {(activeTab === 'overview' || activeTab === 'send') && (
-                    <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
-                  <div className="mb-6 flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
-                        Portfolio
-                      </p>
-                      <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Network Balances</h2>
-                    </div>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/20">
-                      <Globe className="h-6 w-6 text-brand-red" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {networkBalances.map((item) => (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {filteredNetworkBalances.map((item) => (
                       <button
                         key={item.chain.id}
                         type="button"
                         onClick={() => setSelectedChainId(item.chain.id)}
-                        className={`flex w-full items-center justify-between gap-4 rounded-[22px] border px-4 py-4 text-left transition-all ${
+                        className={`rounded-[24px] border p-5 text-left transition-all ${
                           item.chain.id === selectedChainId
-                            ? 'border-brand-red/40 bg-brand-red/10'
-                            : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.07]'
+                            ? 'border-brand-red/40 bg-brand-red/10 red-glow'
+                            : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08]'
                         }`}
                       >
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-                            {item.chain.nativeCurrency.symbol}
-                          </p>
-                          <p className="mt-2 text-base font-black text-white">{item.chain.name}</p>
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                              {item.chain.nativeCurrency.symbol}
+                            </p>
+                            <p className="mt-2 text-lg font-black text-white">{item.chain.name}</p>
+                          </div>
+                          <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/45">
+                            {item.chain.id === activeChainId ? 'Active' : 'Tracked'}
+                          </span>
                         </div>
-                        <div className="text-right">
-                          <p className="text-base font-black text-white">
-                            {item.isLoading
-                              ? 'Loading...'
-                              : item.balance
-                                ? `${formatNativeBalance(item.balance, 6)} ${item.balance.symbol}`
-                                : 'Unavailable'}
-                          </p>
-                          <p className="mt-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
-                            {item.chain.id === activeChainId ? 'Wallet Active' : 'Tracked'}
-                          </p>
-                        </div>
+                        <p className="mt-5 text-2xl font-black text-white">
+                          {item.isLoading
+                            ? 'Loading...'
+                            : item.balance
+                              ? `${formatNativeBalance(item.balance, 6)} ${item.balance.symbol}`
+                              : 'Unavailable'}
+                        </p>
                       </button>
                     ))}
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => void refetchBalance()}
-                    className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10"
-                  >
-                    <RefreshCcw className="h-4 w-4" />
-                    Refresh Balance
-                  </button>
-                    </div>
-                  )}
                 </div>
-              </section>
-            </div>
+
+                {(activeTab === 'overview' || activeTab === 'activity') && (
+                  <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
+                    <div className="mb-6 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
+                          Activity
+                        </p>
+                        <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Recent Activity</h2>
+                      </div>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/20">
+                        <Activity className="h-6 w-6 text-brand-red" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {filteredActivity.length ? (
+                        filteredActivity.map((item) => (
+                          <div
+                            key={item.hash}
+                            className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4"
+                          >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                                  {item.status === 'confirmed' ? 'Confirmed Transfer' : 'Pending Transfer'}
+                                </p>
+                                <p className="mt-2 text-lg font-black text-white">
+                                  {formatTokenAmount(item.amount)} {item.symbol}
+                                </p>
+                                <p className="mt-2 text-sm text-white/55">
+                                  To {shortenAddress(item.to)}
+                                </p>
+                                <p className="mt-1 text-sm text-white/40">
+                                  {item.chainName ?? getWalletChain(item.chainId).name}
+                                </p>
+                              </div>
+                              <span
+                                className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] ${
+                                  item.status === 'confirmed'
+                                    ? 'border border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                                    : 'border border-amber-300/20 bg-amber-300/10 text-amber-200'
+                                }`}
+                              >
+                                {item.status}
+                              </span>
+                            </div>
+                            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                              <button
+                                type="button"
+                                onClick={() => void copyText(item.hash, 'hash')}
+                                className="inline-flex items-center gap-2 text-sm font-bold text-white/70 transition-colors hover:text-white"
+                              >
+                                <Copy className="h-4 w-4" />
+                                {copyState === 'hash' ? 'Hash Copied' : 'Copy Hash'}
+                              </button>
+                              <a
+                                href={getTransactionExplorerUrl(item.chainId ?? selectedChainId, item.hash)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-sm font-bold text-brand-red-glow transition-colors hover:text-white"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                                View Transaction
+                              </a>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-white/45">
+                          No matching activity.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-6">
+                {(activeTab === 'overview' || activeTab === 'send') && (
+                  <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
+                    <div className="mb-6 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
+                          Send
+                        </p>
+                        <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Transfer Funds</h2>
+                      </div>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/20">
+                        <ArrowUpRight className="h-6 w-6 text-brand-red" />
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleSend} className="space-y-4">
+                      <div className="rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                          Sending On
+                        </p>
+                        <div className="mt-2 flex items-center justify-between gap-4">
+                          <p className="text-base font-black text-white">{selectedChain.name}</p>
+                          {!isSelectedChainActive ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleSwitchSelectedNetwork()}
+                              disabled={isSwitchingChain}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10 disabled:opacity-45"
+                            >
+                              {isSwitchingChain ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="h-3.5 w-3.5" />}
+                              Switch
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <label className="block">
+                        <span className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                          Recipient Address
+                        </span>
+                        <input
+                          type="text"
+                          value={sendTo}
+                          onChange={(event) => setSendTo(event.target.value)}
+                          placeholder="0x..."
+                          className="mt-3 w-full rounded-[22px] border border-white/10 bg-black/35 px-4 py-4 text-sm text-white outline-none transition-all placeholder:text-white/20 focus:border-brand-red/40"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                          Amount
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.000001"
+                          value={sendAmount}
+                          onChange={(event) => setSendAmount(event.target.value)}
+                          placeholder="0.0"
+                          className="mt-3 w-full rounded-[22px] border border-white/10 bg-black/35 px-4 py-4 text-sm text-white outline-none transition-all placeholder:text-white/20 focus:border-brand-red/40"
+                        />
+                      </label>
+
+                      <button
+                        type="submit"
+                        disabled={isSending || isConfirming}
+                        className="inline-flex w-full items-center justify-center gap-3 rounded-[22px] bg-brand-red px-5 py-4 text-sm font-black uppercase tracking-[0.28em] text-white transition-all hover:bg-brand-red-glow disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {isSending || isConfirming ? (
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                        {isSending ? 'Confirm In Wallet' : isConfirming ? 'Confirming' : 'Send Now'}
+                      </button>
+                    </form>
+
+                    {sendStatus ? (
+                      <p className="mt-4 rounded-2xl border border-emerald-400/15 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
+                        {sendStatus}
+                      </p>
+                    ) : null}
+
+                    {sendError ? (
+                      <p className="mt-4 rounded-2xl border border-[#ff7c7c]/20 bg-[#4a0a0a]/40 px-4 py-3 text-sm text-[#ffb0b0]">
+                        {sendError}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+
+                {(activeTab === 'overview' || activeTab === 'receive') && (
+                  <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
+                    <div className="mb-6 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
+                          Receive
+                        </p>
+                        <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Wallet Address</h2>
+                      </div>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/20">
+                        <ArrowDownLeft className="h-6 w-6 text-brand-red" />
+                      </div>
+                    </div>
+
+                    <div className="rounded-[24px] border border-brand-red/20 bg-brand-red/10 p-5">
+                      <p className="break-all font-mono text-sm leading-7 text-white/85">{connectedAddress}</p>
+                    </div>
+
+                    <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => void copyText(connectedAddress, 'address')}
+                        className="inline-flex items-center justify-center gap-3 rounded-2xl bg-white px-5 py-4 text-sm font-black uppercase tracking-[0.24em] text-black transition-all hover:bg-brand-red hover:text-white"
+                      >
+                        <Copy className="h-4 w-4" />
+                        {copyState === 'address' ? 'Copied' : 'Copy Address'}
+                      </button>
+                      <a
+                        href={addressExplorerUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-black uppercase tracking-[0.24em] text-white transition-all hover:bg-white/10"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Open Explorer
+                      </a>
+                    </div>
+
+                    <p className="mt-4 text-sm leading-7 text-white/55">
+                      Use this address to receive funds on the selected network.
+                    </p>
+                  </div>
+                )}
+
+                {(activeTab === 'overview' || activeTab === 'accounts') && (
+                  <div className="glass-card rounded-[32px] border border-white/10 p-7 sm:p-8">
+                    <div className="mb-6 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
+                          Accounts
+                        </p>
+                        <h2 className="mt-2 font-display text-3xl font-black tracking-tight">Recent Accounts</h2>
+                      </div>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-red/20">
+                        <Wallet className="h-6 w-6 text-brand-red" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {filteredAccounts.length ? (
+                        filteredAccounts.map((item) => (
+                          <div
+                            key={item.address}
+                            className="flex items-center justify-between gap-4 rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-4"
+                          >
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                                {item.label}
+                              </p>
+                              <p className="mt-2 font-mono text-sm text-white/85">{item.address}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void copyText(item.address, 'account')}
+                              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-all hover:bg-white/10"
+                            >
+                              {copyState === 'account' ? (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-white/45">
+                          No matching accounts.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
           </section>
 
           <footer className="max-w-7xl px-6 pt-20 lg:px-8">
