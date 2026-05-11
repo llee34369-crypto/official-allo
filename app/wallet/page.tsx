@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type SVGProps } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { AppKit } from '@web3modal/base';
-import { ConnectorController, OptionsController } from '@web3modal/core';
+import { BlockchainApiController, ConnectorController, OptionsController } from '@web3modal/core';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { getBalance as getBalanceAction } from '@wagmi/core';
 import { formatUnits, isAddress, parseEther } from 'viem';
@@ -22,6 +22,7 @@ import {
 import {
   defaultWalletChainId,
   getAddressExplorerUrl,
+  getWalletNetworkLogoUrl,
   getTransactionExplorerUrl,
   getWalletChain,
   walletChains,
@@ -99,51 +100,21 @@ function DiscordLogo(props: SVGProps<SVGSVGElement>) {
 function NetworkLogo({
   chainId,
   name,
-  symbol,
   className = '',
 }: {
   chainId: number;
   name: string;
-  symbol: string;
   className?: string;
 }) {
-  const styles: Record<number, { bg: string; ring: string; label: string }> = {
-    1: { bg: 'from-[#627eea] to-[#8ea3ff]', ring: 'ring-[#627eea]/35', label: 'ETH' },
-    56: { bg: 'from-[#f0b90b] to-[#f3d066]', ring: 'ring-[#f0b90b]/35', label: 'BNB' },
-    137: { bg: 'from-[#8247e5] to-[#b38cff]', ring: 'ring-[#8247e5]/35', label: 'POL' },
-    42161: { bg: 'from-[#28a0f0] to-[#9fd7ff]', ring: 'ring-[#28a0f0]/35', label: 'ARB' },
-    10: { bg: 'from-[#ff0420] to-[#ff7a8a]', ring: 'ring-[#ff0420]/35', label: 'OP' },
-    8453: { bg: 'from-[#0052ff] to-[#78a8ff]', ring: 'ring-[#0052ff]/35', label: 'BASE' },
-    43114: { bg: 'from-[#e84142] to-[#ff9393]', ring: 'ring-[#e84142]/35', label: 'AVAX' },
-    204: { bg: 'from-[#f0b90b] to-[#ffec9c]', ring: 'ring-[#f0b90b]/35', label: 'opBNB' },
-    534352: { bg: 'from-[#ffe29f] to-[#ffa99f]', ring: 'ring-[#ffe29f]/35', label: 'SCR' },
-    59144: { bg: 'from-[#61dfff] to-[#bdf6ff]', ring: 'ring-[#61dfff]/35', label: 'LIN' },
-    324: { bg: 'from-[#8c8dfc] to-[#c7c8ff]', ring: 'ring-[#8c8dfc]/35', label: 'ZK' },
-    1101: { bg: 'from-[#7b3fe4] to-[#b597ff]', ring: 'ring-[#7b3fe4]/35', label: 'zkEVM' },
-    5000: { bg: 'from-[#0c0c10] to-[#777f8f]', ring: 'ring-white/20', label: 'MNT' },
-    34443: { bg: 'from-[#dffe00] to-[#f7ff9c]', ring: 'ring-[#dffe00]/35', label: 'MODE' },
-    42220: { bg: 'from-[#35d07f] to-[#9bf2c6]', ring: 'ring-[#35d07f]/35', label: 'CELO' },
-    100: { bg: 'from-[#00a6c4] to-[#8eeeff]', ring: 'ring-[#00a6c4]/35', label: 'GNO' },
-    250: { bg: 'from-[#1468fc] to-[#8cb9ff]', ring: 'ring-[#1468fc]/35', label: 'FTM' },
-    1329: { bg: 'from-[#ff6b6b] to-[#ffd16b]', ring: 'ring-[#ff6b6b]/35', label: 'SEI' },
-    7777777: { bg: 'from-[#7a4cff] to-[#d8c9ff]', ring: 'ring-[#7a4cff]/35', label: 'ZORA' },
-  };
-
-  const style = styles[chainId] ?? {
-    bg: 'from-[#5b0e0e] to-[#ff4d4d]',
-    ring: 'ring-brand-red/35',
-    label: symbol.slice(0, 4).toUpperCase(),
-  };
+  const logoUrl = getWalletNetworkLogoUrl(chainId);
 
   return (
     <div
-      className={`flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br ${style.bg} text-[10px] font-black uppercase tracking-[0.18em] text-black ring-1 ${style.ring} ${className}`}
+      className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white ${className}`}
       aria-label={`${name} logo`}
       title={name}
     >
-      <span className="max-w-[32px] truncate px-1 text-center text-[9px] leading-none text-black/85">
-        {style.label}
-      </span>
+      <img src={logoUrl} alt={`${name} logo`} className="h-full w-full object-cover" />
     </div>
   );
 }
@@ -437,6 +408,15 @@ export default function WalletPage() {
         }),
     })),
   });
+  const tokenBalanceQueries = useQueries({
+    queries: walletChains.map((chain) => ({
+      queryKey: ['wallet-token-list', address?.toLowerCase() ?? 'unknown', chain.id],
+      enabled: Boolean(address && shouldShowWalletDashboard),
+      staleTime: 30000,
+      retry: 1,
+      queryFn: async () => BlockchainApiController.getBalance(address as string, String(chain.id)),
+    })),
+  });
   const networkBalances = walletChains.map((chain, index) => {
     const query = networkBalanceQueries[index];
     return {
@@ -453,6 +433,20 @@ export default function WalletPage() {
     );
     return Number.isFinite(parsed) && parsed > 0;
   }).length;
+  const tokenBalances = walletChains.flatMap((chain, index) => {
+    const response = tokenBalanceQueries[index]?.data;
+    return (response?.balances ?? []).map((balance) => ({
+      ...balance,
+      chain: getWalletChain(Number(balance.chainId || chain.id)),
+    }));
+  });
+  const selectedNetworkTokens = tokenBalances
+    .filter((token) => Number(token.chainId) === selectedChainId)
+    .filter((token) => {
+      const amount = Number(token.quantity?.numeric ?? 0);
+      return Number.isFinite(amount) && amount > 0;
+    })
+    .sort((left, right) => (right.value ?? 0) - (left.value ?? 0));
   const normalizedDashboardSearch = dashboardSearch.trim().toLowerCase();
   const filteredNetworkBalances = networkBalances.filter((item) => {
     if (!normalizedDashboardSearch) {
@@ -511,31 +505,49 @@ export default function WalletPage() {
     const buckets = new Map<
       string,
       {
+        name: string;
         symbol: string;
         total: number;
         chains: number;
+        value: number;
       }
     >();
 
-    for (const item of networkBalances) {
-      if (!item.balance) {
-        continue;
-      }
-
-      const amount = Number(formatUnits(item.balance.value, item.balance.decimals));
+    for (const item of tokenBalances) {
+      const amount = Number(item.quantity?.numeric ?? 0);
       if (!Number.isFinite(amount) || amount <= 0) {
         continue;
       }
 
-      const key = item.balance.symbol.toUpperCase();
-      const current = buckets.get(key) ?? { symbol: item.balance.symbol, total: 0, chains: 0 };
+      const key = `${item.symbol.toUpperCase()}:${item.address ?? item.name}`;
+      const current = buckets.get(key) ?? {
+        name: item.name,
+        symbol: item.symbol,
+        total: 0,
+        chains: 0,
+        value: 0,
+      };
       current.total += amount;
+      current.value += item.value ?? 0;
       current.chains += 1;
       buckets.set(key, current);
     }
 
-    return Array.from(buckets.values()).sort((left, right) => right.total - left.total);
-  }, [networkBalances]);
+    return Array.from(buckets.values()).sort(
+      (left, right) => (right.value || right.total) - (left.value || left.total)
+    );
+  }, [tokenBalances]);
+  const filteredSelectedNetworkTokens = selectedNetworkTokens.filter((token) => {
+    if (!normalizedDashboardSearch) {
+      return true;
+    }
+
+    return (
+      token.name.toLowerCase().includes(normalizedDashboardSearch) ||
+      token.symbol.toLowerCase().includes(normalizedDashboardSearch) ||
+      token.address?.toLowerCase().includes(normalizedDashboardSearch)
+    );
+  });
 
   useEffect(() => {
     setStoredAccounts(loadStoredAccounts());
@@ -1039,7 +1051,7 @@ export default function WalletPage() {
                     {overallHoldings.length ? (
                       overallHoldings.map((item) => (
                         <div
-                          key={item.symbol}
+                          key={`${item.symbol}-${item.name}`}
                           className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4"
                         >
                           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
@@ -1048,8 +1060,12 @@ export default function WalletPage() {
                           <p className="mt-2 text-2xl font-black text-white">
                             {formatTokenAmount(String(item.total), 6)}
                           </p>
+                          <p className="mt-1 text-sm text-white/50">{item.name}</p>
                           <p className="mt-2 text-sm text-white/45">
-                            Across {item.chains} {item.chains === 1 ? 'network' : 'networks'}
+                            Across {item.chains} {item.chains === 1 ? 'entry' : 'entries'}
+                          </p>
+                          <p className="mt-2 text-sm font-bold text-white/70">
+                            ${formatTokenAmount(String(item.value), 2)}
                           </p>
                         </div>
                       ))
@@ -1121,7 +1137,6 @@ export default function WalletPage() {
                             <NetworkLogo
                               chainId={item.chain.id}
                               name={item.chain.name}
-                              symbol={item.chain.nativeCurrency.symbol}
                               className="mt-0.5 h-11 w-11 shrink-0"
                             />
                             <div>
@@ -1144,6 +1159,62 @@ export default function WalletPage() {
                         </p>
                       </button>
                     ))}
+                  </div>
+                </div>
+
+                <div className="glass-card rounded-[32px] border border-white/10 p-6 sm:p-8">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.32em] text-white/35">
+                        Tokens
+                      </p>
+                      <h2 className="mt-2 font-display text-3xl font-black tracking-tight">
+                        {selectedChain.name} token list
+                      </h2>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {filteredSelectedNetworkTokens.length ? (
+                      filteredSelectedNetworkTokens.map((token) => (
+                        <div
+                          key={`${token.chainId}-${token.address ?? token.symbol}`}
+                          className="flex items-center justify-between gap-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-4"
+                        >
+                          <div className="flex min-w-0 items-center gap-4">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white">
+                              {token.iconUrl ? (
+                                <img
+                                  src={token.iconUrl}
+                                  alt={`${token.name} logo`}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="text-xs font-black uppercase text-black">
+                                  {token.symbol.slice(0, 3)}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-base font-black text-white">{token.name}</p>
+                              <p className="mt-1 text-sm text-white/45">{token.symbol}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-base font-black text-white">
+                              {formatTokenAmount(token.quantity.numeric, 6)}
+                            </p>
+                            <p className="mt-1 text-sm text-white/50">
+                              ${formatTokenAmount(String(token.value ?? 0), 2)}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-white/45">
+                        No token balances found on {selectedChain.name}.
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1422,7 +1493,6 @@ export default function WalletPage() {
               <NetworkLogo
                 chainId={selectedChain.id}
                 name={selectedChain.name}
-                symbol={selectedChain.nativeCurrency.symbol}
               />
               <div>
                 <p className="text-sm font-black text-white">{selectedChain.name}</p>
@@ -1512,7 +1582,6 @@ export default function WalletPage() {
                   <NetworkLogo
                     chainId={selectedChain.id}
                     name={selectedChain.name}
-                    symbol={selectedChain.nativeCurrency.symbol}
                   />
                   <div>
                     <p className="text-sm font-black text-white">{selectedChain.name}</p>
