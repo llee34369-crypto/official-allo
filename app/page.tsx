@@ -1013,7 +1013,8 @@ export default function LandingPage() {
                 <span className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black mb-2">Protocol</span>
                 <Link href="/documentation" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Documentation</Link>
                 <Link href="/allocation" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Allocation</Link>
-                <Link href="testnet" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Testnet</Link>
+                <Link href="/wallet" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Wallet</Link>
+                <Link href="/testnet" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Testnet</Link>
                 <a href={SOCIAL_LINKS.website} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-white/60 hover:text-brand-red transition-colors">Website</a>
               </div>
               <div className="flex flex-col gap-4">

@@ -14,6 +14,7 @@ import {
   Network,
   Rocket,
   ShieldCheck,
+  Wallet,
   Zap,
 } from 'lucide-react';
 
@@ -236,14 +237,24 @@ export default function DocumentationPage() {
                   </div>
                 </div>
 
-                <Link
-                  href="/"
-                  prefetch
-                  className="w-full px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Back Home
-                </Link>
+                <div className="grid grid-cols-2 gap-3">
+                  <Link
+                    href="/"
+                    prefetch
+                    className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Home
+                  </Link>
+                  <Link
+                    href="/wallet"
+                    prefetch
+                    className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    Wallet
+                  </Link>
+                </div>
               </div>
 
               <div className="flex-1 min-h-0 pt-8 pr-2 overflow-y-auto sidebar-scroll">

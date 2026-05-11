@@ -2447,6 +2447,7 @@ Earn more points by completing quests and interacting with the protocol.
                 <span className="mb-2 text-[10px] font-black uppercase tracking-[0.4em] text-white/30">Protocol</span>
                 <Link href="/documentation" className="text-sm font-bold text-white/60 transition-colors hover:text-brand-red">Documentation</Link>
                 <Link href="/allocation" className="text-sm font-bold text-white/60 transition-colors hover:text-brand-red">Allocation</Link>
+                <Link href="/wallet" className="text-sm font-bold text-white/60 transition-colors hover:text-brand-red">Wallet</Link>
                 <Link href="/testnet" className="text-sm font-bold text-white/60 transition-colors hover:text-brand-red">Testnet</Link>
                 <a href={SOCIAL_LINKS.website} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-white/60 transition-colors hover:text-brand-red">Website</a>
               </div>
