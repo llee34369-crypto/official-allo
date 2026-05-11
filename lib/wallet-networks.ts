@@ -3,12 +3,44 @@ import {
   avalanche,
   base,
   bsc,
+  celo,
+  fantom,
+  gnosis,
+  linea,
   mainnet,
+  mantle,
+  mode,
+  opBNB,
   optimism,
   polygon,
+  polygonZkEvm,
+  scroll,
+  sei,
+  zksync,
+  zora,
 } from 'wagmi/chains';
 
-export const walletChains = [mainnet, bsc, polygon, arbitrum, optimism, base, avalanche] as const;
+export const walletChains = [
+  mainnet,
+  bsc,
+  polygon,
+  arbitrum,
+  optimism,
+  base,
+  avalanche,
+  opBNB,
+  scroll,
+  linea,
+  zksync,
+  polygonZkEvm,
+  mantle,
+  mode,
+  celo,
+  gnosis,
+  fantom,
+  sei,
+  zora,
+] as const;
 
 export const defaultWalletChainId = bsc.id;
 
